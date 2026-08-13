@@ -1,0 +1,16 @@
+[project]
+name = "end-to-end-q-commerce-operations-platform"
+version = "0.1.0"
+description = "Quick-Commerce Cloud Operations Platform"
+readme = "README.md"
+authors = [
+    { name = "Ayush", email = "ayush.srivastava20704@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "dbt-core",
+    "dbt-bigquery",
+]
+
+[tool.uv]
+package = false
