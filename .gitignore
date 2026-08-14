@@ -12,3 +12,14 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# dbt generated directories
+target/
+dbt_packages/
+logs/
+
+# Secrets and credentials (crucial if you add keys later)
+*.json
+*.env
+.env
+profiles.yml
