@@ -5,22 +5,20 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
-ORDER_STATUSES = [
-    "FULFILLING",
-    "DELIVERED",
-    "CANCELLED",
-    "FAILED",
-]
+from simulator.geography import BENGALURU_ZONES
+from simulator.time_utils import format_timestamp
 
 
-def generate_order_created_at() -> datetime:
+def generate_order_created_at(
+    base_date: datetime,
+) -> datetime:
     """
     Generate an order timestamp with realistic demand variation.
 
-    More orders are generated during common quick-commerce
-    demand periods rather than uniformly across the day.
+    Higher activity is concentrated around common quick-commerce
+    demand periods.
     """
+
     demand_periods = [
         (7, 10),    # Morning
         (11, 14),   # Lunch
@@ -28,13 +26,17 @@ def generate_order_created_at() -> datetime:
         (22, 24),   # Late night
     ]
 
-    start_hour, end_hour = random.choice(demand_periods)
+    start_hour, end_hour = random.choice(
+        demand_periods
+    )
 
-    hour = random.randint(start_hour, end_hour - 1)
+    hour = random.randint(
+        start_hour,
+        end_hour - 1,
+    )
+
     minute = random.randint(0, 59)
     second = random.randint(0, 59)
-
-    base_date = datetime(2026, 8, 15)
 
     return base_date.replace(
         hour=hour,
@@ -43,93 +45,175 @@ def generate_order_created_at() -> datetime:
     )
 
 
+def generate_alternate_delivery_location(
+    customer: dict,
+) -> dict:
+    """
+    Generate an alternate delivery location.
+
+    This simulates cases where a customer places an order
+    for delivery somewhere other than their registered location.
+    """
+
+    zone = random.choice(BENGALURU_ZONES)
+
+    latitude = round(
+        zone.center_lat
+        + random.uniform(
+            -zone.spread,
+            zone.spread,
+        ),
+        6,
+    )
+
+    longitude = round(
+        zone.center_lon
+        + random.uniform(
+            -zone.spread,
+            zone.spread,
+        ),
+        6,
+    )
+
+    return {
+        "zone_id": zone.zone_id,
+        "latitude": latitude,
+        "longitude": longitude,
+    }
+
+
 def generate_orders(
     customers: list[dict],
     count: int = 100,
+    base_date: datetime | None = None,
 ) -> list[dict]:
     """
-    Generate orders using existing customers.
+    Generate order records using existing customers.
 
-    Each order references a real customer and copies the customer's
-    current location into the order as a historical delivery snapshot.
+    Orders are created in the CREATED state.
+
+    Final outcomes such as DELIVERED, CANCELLED, and FAILED
+    are determined later by the operational lifecycle.
     """
+
     if not customers:
-        raise ValueError("Customers cannot be empty.")
+        raise ValueError(
+            "Customers cannot be empty."
+        )
+
+    if count <= 0:
+        raise ValueError(
+            "Order count must be greater than zero."
+        )
+
+    if base_date is None:
+        base_date = datetime(
+            2026,
+            8,
+            15,
+            0,
+            0,
+            0,
+        )
 
     orders = []
 
     for i in range(1, count + 1):
-        customer = random.choice(customers)
 
-        created_at = generate_order_created_at()
-
-        # Payment usually succeeds shortly after order creation.
-        payment_success_at = created_at + timedelta(
-            seconds=random.randint(5, 45)
+        customer = random.choice(
+            customers
         )
 
-        status = random.choices(
-            population=ORDER_STATUSES,
-            weights=[70, 20, 7, 3],
-            k=1,
-        )[0]
+        created_at = generate_order_created_at(
+            base_date
+        )
 
-        cancelled_at = None
-        cancellation_reason = None
-        failure_reason = None
+        payment_success_at = (
+            created_at
+            + timedelta(
+                seconds=random.randint(
+                    5,
+                    45,
+                )
+            )
+        )
 
-        if status == "CANCELLED":
-            cancelled_at = payment_success_at + timedelta(
-                minutes=random.randint(2, 20)
-            )
-            cancellation_reason = random.choice(
-                [
-                    "CUSTOMER_REQUEST",
-                    "PAYMENT_ISSUE",
-                    "STORE_UNAVAILABLE",
-                    "ITEM_UNAVAILABLE",
-                ]
+        # Most orders use the customer's registered
+        # delivery location. A smaller percentage are
+        # delivered to an alternate location.
+        use_alternate_location = (
+            random.random() < 0.10
+        )
+
+        if use_alternate_location:
+
+            delivery_location = (
+                generate_alternate_delivery_location(
+                    customer
+                )
             )
 
-        elif status == "FAILED":
-            failure_reason = random.choice(
-                [
-                    "STORE_ASSIGNMENT_FAILED",
-                    "SYSTEM_ERROR",
-                    "NO_RIDER_AVAILABLE",
-                ]
-            )
+        else:
+
+            delivery_location = {
+                "zone_id": customer["zone_id"],
+                "latitude": customer["latitude"],
+                "longitude": customer["longitude"],
+            }
 
         orders.append(
             {
                 "order_id": f"ORD-{i:06d}",
                 "customer_id": customer["customer_id"],
-                "created_at": created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "payment_success_at": payment_success_at.strftime(
-                    "%Y-%m-%d %H:%M:%S"
+                "created_at": format_timestamp(
+                    created_at
                 ),
-                "delivery_latitude": customer["latitude"],
-                "delivery_longitude": customer["longitude"],
-                "delivery_zone": customer["zone_id"],
-                "status": status,
-                "cancelled_at": (
-                    cancelled_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if cancelled_at
-                    else ""
+                "payment_success_at": format_timestamp(
+                    payment_success_at
                 ),
-                "cancellation_reason": cancellation_reason or "",
-                "failure_reason": failure_reason or "",
+                "delivery_latitude": (
+                    delivery_location["latitude"]
+                ),
+                "delivery_longitude": (
+                    delivery_location["longitude"]
+                ),
+                "delivery_zone": (
+                    delivery_location["zone_id"]
+                ),
+
+                # Status represents the current state.
+                # At creation time the order has only just
+                # been created.
+                "status": "CREATED",
+
+                # These are populated only if a later
+                # lifecycle outcome requires them.
+                "cancelled_at": "",
+                "cancellation_reason": "",
+                "failure_reason": "",
             }
         )
 
     return orders
 
 
-def save_orders(orders: list[dict]) -> None:
-    output_dir = Path(__file__).parent.parent / "datasets"
-    output_dir.mkdir(parents=True, exist_ok=True)
+def save_orders(
+    orders: list[dict],
+) -> None:
 
-    output_file = output_dir / "orders.csv"
+    output_dir = (
+        Path(__file__).parent.parent
+        / "datasets"
+    )
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_file = (
+        output_dir / "orders.csv"
+    )
 
     fieldnames = [
         "order_id",
@@ -150,28 +234,59 @@ def save_orders(orders: list[dict]) -> None:
         newline="",
         encoding="utf-8",
     ) as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames,
+        )
+
         writer.writeheader()
         writer.writerows(orders)
 
-    print(f"Generated {len(orders)} orders")
-    print(f"Dataset saved to: {output_file}")
-
-
-if __name__ == "__main__":
-    # Load the existing customer dataset.
-    customers_file = (
-        Path(__file__).parent.parent
-        / "datasets"
-        / "customers.csv"
+    print(
+        f"Generated {len(orders)} orders"
     )
 
-    with customers_file.open(
+    print(
+        f"Dataset saved to: {output_file}"
+    )
+
+
+def load_csv(
+    filename: str,
+) -> list[dict]:
+
+    dataset_dir = (
+        Path(__file__).parent.parent
+        / "datasets"
+    )
+
+    input_file = (
+        dataset_dir / filename
+    )
+
+    if not input_file.exists():
+        raise FileNotFoundError(
+            f"Required dataset not found: "
+            f"{input_file}"
+        )
+
+    with input_file.open(
         "r",
         newline="",
         encoding="utf-8",
     ) as file:
-        customers = list(csv.DictReader(file))
+
+        return list(
+            csv.DictReader(file)
+        )
+
+
+if __name__ == "__main__":
+
+    customers = load_csv(
+        "customers.csv"
+    )
 
     orders = generate_orders(
         customers=customers,
