@@ -16,6 +16,7 @@ class SimulationConfig:
 
     # Store staffing
     staffing_interval_hours: int = 1
+    staffing_hours: int = 24
 
 
 CONFIG = SimulationConfig()
