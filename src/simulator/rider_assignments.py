@@ -36,273 +36,173 @@ def format_datetime(value: datetime) -> str:
     )
 
 
-def generate_rider_assignments(
-    deliveries: list[dict],
+def generate_assignment_attempts(
+    delivery: dict,
+    fulfilment: dict,
+    store: dict,
     riders: list[dict],
-    fulfilment_units: list[dict],
-    stores: list[dict],
-) -> tuple[list[dict], list[dict]]:
+    rider_available_at: dict[str, datetime],
+    assignment_counter: int,
+    offered_at: datetime,
+) -> tuple[
+    list[dict],
+    str | None,
+    datetime | None,
+    int,
+]:
     """
-    Generate rider assignment attempts for delivery requests.
+    Generate rider assignment attempts for one delivery.
 
-    A delivery can be offered to multiple riders. The first rider
-    who accepts becomes the final rider for that delivery.
+    The lifecycle engine owns the timeline.
+
+    This function only answers:
+        - Which riders were offered?
+        - What did they respond?
+        - Who accepted?
 
     Returns:
         assignments
-        updated_deliveries
+        accepted_rider_id
+        accepted_at
+        next_assignment_counter
     """
 
-    if not deliveries:
-        raise ValueError(
-            "Deliveries cannot be empty."
-        )
-
-    if not riders:
-        raise ValueError(
-            "Riders cannot be empty."
-        )
-
-    if not fulfilment_units:
-        raise ValueError(
-            "Fulfilment units cannot be empty."
-        )
-
-    if not stores:
-        raise ValueError(
-            "Stores cannot be empty."
-        )
-
-    fulfilments_by_id = {
-        fulfilment["fulfilment_unit_id"]: fulfilment
-        for fulfilment in fulfilment_units
-    }
-
-    stores_by_id = {
-        store["store_id"]: store
-        for store in stores
-    }
-
-    riders_by_id = {
-        rider["rider_id"]: rider
+    active_riders = [
+        rider
         for rider in riders
         if rider["status"] == "ACTIVE"
-    }
+    ]
 
-    # Tracks when each rider becomes available again.
-    rider_available_at: dict[str, datetime] = {
-        rider_id: datetime.min
-        for rider_id in riders_by_id
-    }
+    available_riders = [
+        rider
+        for rider in active_riders
+        if rider_available_at[
+            rider["rider_id"]
+        ] <= offered_at
+    ]
 
-    assignments: list[dict] = []
-    updated_deliveries: list[dict] = []
+    matching_riders = [
+        rider
+        for rider in available_riders
+        if rider["home_zone"] == store["zone"]
+    ]
 
-    assignment_counter = 1
-
-    # Process delivery requests chronologically.
-    sorted_deliveries = sorted(
-        deliveries,
-        key=lambda delivery: parse_datetime(
-            fulfilments_by_id[
-                delivery["fulfilment_unit_id"]
-            ]["assigned_to_store_at"]
-        ),
+    candidate_pool = (
+        matching_riders
+        if matching_riders
+        else available_riders
     )
 
-    for delivery in sorted_deliveries:
-
-        fulfilment = fulfilments_by_id.get(
-            delivery["fulfilment_unit_id"]
+    if not candidate_pool:
+        return (
+            [],
+            None,
+            None,
+            assignment_counter,
         )
 
-        if fulfilment is None:
-            raise ValueError(
-                "Fulfilment unit not found: "
-                f"{delivery['fulfilment_unit_id']}"
-            )
+    candidate_count = min(
+        len(candidate_pool),
+        random.randint(1, 3),
+    )
 
-        store = stores_by_id.get(
-            fulfilment["store_id"]
-        )
+    candidates = random.sample(
+        candidate_pool,
+        k=candidate_count,
+    )
 
-        if store is None:
-            raise ValueError(
-                "Store not found: "
-                f"{fulfilment['store_id']}"
-            )
+    assignments = []
 
-        offered_at = (
-            parse_datetime(
-                fulfilment["assigned_to_store_at"]
-            )
-            + timedelta(
-                minutes=random.randint(1, 5)
-            )
-        )
+    accepted_rider_id: str | None = None
+    accepted_at: datetime | None = None
 
-        # -----------------------------------------------------
-        # Find riders available at this point in time.
-        # -----------------------------------------------------
+    for candidate in candidates:
 
-        available_riders = [
-            rider
-            for rider_id, rider in riders_by_id.items()
-            if rider_available_at[rider_id] <= offered_at
-        ]
+        response_roll = random.random()
 
-        # Prefer riders from the same operating zone as the store.
-        matching_riders = [
-            rider
-            for rider in available_riders
-            if rider["home_zone"] == store["zone"]
-        ]
+        if response_roll < 0.70:
+            response = "ACCEPTED"
 
-        candidate_pool = (
-            matching_riders
-            if matching_riders
-            else available_riders
-        )
-
-        updated_delivery = dict(delivery)
-
-        # No rider is currently available.
-        if not candidate_pool:
-            updated_delivery["status"] = "FAILED"
-            updated_delivery["failure_reason"] = (
-                "NO_RIDER_AVAILABLE"
-            )
-
-            updated_deliveries.append(
-                updated_delivery
-            )
-
-            continue
-
-        # -----------------------------------------------------
-        # Select riders who receive an offer.
-        # -----------------------------------------------------
-
-        candidate_count = min(
-            len(candidate_pool),
-            random.randint(1, 3),
-        )
-
-        candidates = random.sample(
-            candidate_pool,
-            k=candidate_count,
-        )
-
-        accepted_rider_id: str | None = None
-        accepted_at: datetime | None = None
-
-        for candidate in candidates:
-
-            response_roll = random.random()
-
-            if response_roll < 0.70:
-                response = "ACCEPTED"
-            elif response_roll < 0.90:
-                response = "REJECTED"
-            else:
-                response = "EXPIRED"
-
-            responded_at = (
-                offered_at
-                + timedelta(
-                    seconds=random.randint(
-                        20,
-                        90,
-                    )
-                )
-            )
-
-            rejection_reason = ""
-
-            if response == "REJECTED":
-                rejection_reason = random.choice(
-                    REJECTION_REASONS
-                )
-
-            assignments.append(
-                {
-                    "assignment_id": (
-                        f"RA-{assignment_counter:07d}"
-                    ),
-                    "delivery_id": (
-                        delivery["delivery_id"]
-                    ),
-                    "rider_id": (
-                        candidate["rider_id"]
-                    ),
-                    "offered_at": format_datetime(
-                        offered_at
-                    ),
-                    "responded_at": format_datetime(
-                        responded_at
-                    ),
-                    "response": response,
-                    "rejection_reason": (
-                        rejection_reason
-                    ),
-                }
-            )
-
-            assignment_counter += 1
-
-            if response == "ACCEPTED":
-                accepted_rider_id = (
-                    candidate["rider_id"]
-                )
-                accepted_at = responded_at
-                break
-
-        # -----------------------------------------------------
-        # Update final delivery state.
-        # -----------------------------------------------------
-
-        if accepted_rider_id is not None:
-
-            updated_delivery["rider_id"] = (
-                accepted_rider_id
-            )
-
-            updated_delivery["status"] = (
-                "ASSIGNED"
-            )
-
-            updated_delivery["failure_reason"] = ""
-
-            # Temporary development assumption.
-            # The final lifecycle engine will replace this
-            # with the actual delivery completion timestamp.
-            estimated_delivery_duration = timedelta(
-                minutes=random.randint(8, 25)
-            )
-
-            rider_available_at[
-                accepted_rider_id
-            ] = (
-                accepted_at
-                + estimated_delivery_duration
-            )
+        elif response_roll < 0.90:
+            response = "REJECTED"
 
         else:
-            updated_delivery["status"] = (
-                "FAILED"
-            )
+            response = "EXPIRED"
 
-            updated_delivery["failure_reason"] = (
-                "NO_RIDER_ACCEPTED"
+        response_time = (
+            offered_at
+            + timedelta(
+                seconds=random.randint(
+                    20,
+                    90,
+                )
             )
-
-        updated_deliveries.append(
-            updated_delivery
         )
+
+        rejection_reason = ""
+
+        responded_at = ""
+        expired_at = ""
+
+        if response == "ACCEPTED":
+            responded_at = format_datetime(
+                response_time
+            )
+
+        elif response == "REJECTED":
+            responded_at = format_datetime(
+                response_time
+            )
+
+            rejection_reason = random.choice(
+                REJECTION_REASONS
+            )
+
+        elif response == "EXPIRED":
+            expired_at = format_datetime(
+                response_time
+            )
+
+        assignments.append(
+            {
+                "assignment_id": (
+                    f"RA-{assignment_counter:07d}"
+                ),
+                "delivery_id": (
+                    delivery["delivery_id"]
+                ),
+                "rider_id": (
+                    candidate["rider_id"]
+                ),
+                "offered_at": format_datetime(
+                    offered_at
+                ),
+                "responded_at": responded_at,
+                "expired_at": expired_at,
+                "response": response,
+                "rejection_reason": (
+                    rejection_reason
+                ),
+            }
+        )
+
+        assignment_counter += 1
+
+        if response == "ACCEPTED":
+
+            accepted_rider_id = (
+                candidate["rider_id"]
+            )
+
+            accepted_at = response_time
+
+            break
 
     return (
         assignments,
-        updated_deliveries,
+        accepted_rider_id,
+        accepted_at,
+        assignment_counter,
     )
 
 

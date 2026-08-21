@@ -10,6 +10,10 @@ from simulator.time_utils import (
     parse_timestamp,
 )
 
+from simulator.rider_assignments import (
+    generate_assignment_attempts,
+)
+
 
 FULFILMENT_CANCELLATION_RATE = 0.03
 FULFILMENT_FAILURE_RATE = 0.02
@@ -94,8 +98,10 @@ def generate_operational_events(
     orders: list[dict],
     fulfilment_units: list[dict],
     deliveries: list[dict],
-    assignments: list[dict],
+    riders: list[dict],
+    stores: list[dict],
 ) -> tuple[
+    list[dict],
     list[dict],
     list[dict],
     list[dict],
@@ -329,7 +335,7 @@ def generate_operational_events(
 
         picking_completed_at = (
             picking_started_at
-            + generate_picking_duration()
+            + generate_picking_duration(order)
         )
 
         add_event(
