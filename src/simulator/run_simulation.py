@@ -15,7 +15,7 @@ from simulator.fulfilment_units import generate_fulfilment_units
 from simulator.order_items import generate_order_items
 from simulator.deliveries import generate_deliveries
 from simulator.rider_assignments import (
-    generate_rider_assignments,
+    generate_assignment_attempts,
 )
 from simulator.operational_events import (
     generate_operational_events,
@@ -195,6 +195,7 @@ def save_all_datasets(
             "rider_id",
             "offered_at",
             "responded_at",
+            "expired_at",
             "response",
             "rejection_reason",
         ],
@@ -349,25 +350,6 @@ def run_simulation() -> SimulationState:
         f"{len(state.deliveries):,}"
     )
 
-    print("\n[8/10] Rider Assignments")
-
-    (
-        state.rider_assignments,
-        state.deliveries,
-    ) = generate_rider_assignments(
-        deliveries=state.deliveries,
-        riders=state.riders,
-        fulfilment_units=(
-            state.fulfilment_units
-        ),
-        stores=state.stores,
-    )
-
-    print(
-        f"  Generated: "
-        f"{len(state.rider_assignments):,}"
-    )
-
     # ---------------------------------------------------------
     # 3. Lifecycle engine
     # ---------------------------------------------------------
@@ -386,9 +368,8 @@ def run_simulation() -> SimulationState:
             state.fulfilment_units
         ),
         deliveries=state.deliveries,
-        assignments=(
-            state.rider_assignments
-        ),
+        riders=state.riders,
+        stores=state.stores,
     )
 
     print(

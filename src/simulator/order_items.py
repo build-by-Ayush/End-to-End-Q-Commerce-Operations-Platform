@@ -62,7 +62,7 @@ def generate_order_items(
         active_units = [
             unit
             for unit in units
-            if unit["status"] == "READY_FOR_PICKING"
+            if unit["status"] == "PENDING"
         ]
 
         if not active_units:
