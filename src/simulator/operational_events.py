@@ -48,28 +48,106 @@ def load_csv(filename: str) -> list[dict]:
 
 
 def generate_picking_duration(
-    order: dict,
+    item_count: int,
+    pickers_available: int,
+    pickers_scheduled: int,
 ) -> timedelta:
     """
-    Generate a temporary picking duration.
-
-    The current version uses a random baseline.
-    Later this will incorporate order-item quantity
-    and store staffing.
+    Generate picking duration using basket complexity
+    and available picker capacity.
     """
 
+    if item_count <= 0:
+        raise ValueError(
+            "item_count must be greater than zero."
+        )
+
+    if pickers_scheduled <= 0:
+        raise ValueError(
+            "pickers_scheduled must be greater than zero."
+        )
+
+    base_seconds = 90
+
+    per_item_seconds = random.randint(
+        20,
+        40,
+    )
+
+    random_variation_seconds = random.randint(
+        0,
+        120,
+    )
+
+    normal_seconds = (
+        base_seconds
+        + item_count * per_item_seconds
+        + random_variation_seconds
+    )
+
+    staffing_ratio = (
+        pickers_available
+        / pickers_scheduled
+    )
+
+    if staffing_ratio < 0.50:
+        staffing_multiplier = 1.35
+
+    elif staffing_ratio < 0.75:
+        staffing_multiplier = 1.15
+
+    else:
+        staffing_multiplier = 1.00
+
+    total_seconds = (
+        normal_seconds
+        * staffing_multiplier
+    )
+
     return timedelta(
-        minutes=random.randint(2, 7),
-        seconds=random.randint(0, 59),
+        seconds=int(total_seconds)
     )
 
 
-def generate_packing_duration() -> timedelta:
-    """Generate a temporary packing duration."""
+def generate_packing_duration(
+    packers_available: int,
+    packers_scheduled: int,
+) -> timedelta:
+    """
+    Generate packing duration using packer availability.
+    """
+
+    if packers_scheduled <= 0:
+        raise ValueError(
+            "packers_scheduled must be greater than zero."
+        )
+
+    base_seconds = random.randint(
+        60,
+        150,
+    )
+
+    staffing_ratio = (
+        packers_available
+        / packers_scheduled
+    )
+
+    if staffing_ratio < 0.50:
+        staffing_multiplier = 1.30
+
+    elif staffing_ratio < 0.75:
+        staffing_multiplier = 1.15
+
+    else:
+        staffing_multiplier = 1.00
+
+    total_seconds = (
+        base_seconds
+        * staffing_multiplier
+    )
 
     return timedelta(
-        minutes=random.randint(1, 3),
-        seconds=random.randint(0, 30),
+        seconds=int(total_seconds)
     )
 
 
@@ -94,12 +172,63 @@ def choose_fulfilment_outcome() -> str:
     return "NORMAL"
 
 
+def get_staffing_at_time(
+    store_id: str,
+    timestamp: datetime,
+    store_staffing: list[dict],
+) -> dict:
+    """
+    Get the latest staffing observation for a store
+    at or before the given timestamp.
+    """
+
+    observations = [
+        row
+        for row in store_staffing
+        if row["store_id"] == store_id
+    ]
+
+    if not observations:
+        raise ValueError(
+            f"No staffing observations found for "
+            f"store {store_id}"
+        )
+
+    observations.sort(
+        key=lambda row: parse_timestamp(
+            row["recorded_at"]
+        )
+    )
+
+    latest_observation = None
+
+    for observation in observations:
+
+        recorded_at = parse_timestamp(
+            observation["recorded_at"]
+        )
+
+        if recorded_at <= timestamp:
+            latest_observation = observation
+        else:
+            break
+
+    # If the first staffing record occurs after the
+    # lifecycle timestamp, use the earliest observation.
+    if latest_observation is None:
+        latest_observation = observations[0]
+
+    return latest_observation
+
+
 def generate_operational_events(
     orders: list[dict],
     fulfilment_units: list[dict],
+    order_items: list[dict],
     deliveries: list[dict],
     riders: list[dict],
     stores: list[dict],
+    store_staffing: list[dict],
 ) -> tuple[
     list[dict],
     list[dict],
@@ -128,16 +257,18 @@ def generate_operational_events(
         for delivery in deliveries
     }
 
-    assignments_by_delivery: dict[
-        str,
-        list[dict],
-    ] = {}
+    items_by_fulfilment: dict[str, int] = {}
 
-    for assignment in assignments:
-        assignments_by_delivery.setdefault(
-            assignment["delivery_id"],
-            [],
-        ).append(assignment)
+    for item in order_items:
+        fulfilment_id = item["fulfilment_unit_id"]
+
+        items_by_fulfilment[fulfilment_id] = (
+            items_by_fulfilment.get(
+                fulfilment_id,
+                0,
+            )
+            + 1
+        )
 
     events: list[dict] = []
 
@@ -156,10 +287,18 @@ def generate_operational_events(
         for delivery in deliveries
     ]
 
-    updated_assignments = [
-        dict(assignment)
-        for assignment in assignments
-    ]
+    # Rider assignments are now generated inside the
+    # lifecycle engine rather than passed in from outside.
+    updated_assignments: list[dict] = []
+
+    # Tracks when each rider becomes available again.
+    rider_available_at: dict[str, datetime] = {
+        rider["rider_id"]: datetime.min
+        for rider in riders
+        if rider["status"] == "ACTIVE"
+    }
+
+    assignment_counter = 1
 
     events_by_order: dict[
         str,
@@ -315,6 +454,28 @@ def generate_operational_events(
             )
         )
 
+        staffing = get_staffing_at_time(
+            store_id=store_id,
+            timestamp=picking_started_at,
+            store_staffing=store_staffing,
+        )
+
+        pickers_available = int(
+            staffing["pickers_available"]
+        )
+
+        pickers_scheduled = int(
+            staffing["pickers_scheduled"]
+        )
+
+        packers_available = int(
+            staffing["packers_available"]
+        )
+
+        packers_scheduled = int(
+            staffing["packers_scheduled"]
+        )
+
         add_event(
             event_type="PICKING_STARTED",
             occurred_at=picking_started_at,
@@ -333,9 +494,24 @@ def generate_operational_events(
         # Picking
         # -----------------------------------------------------
 
+        item_count = items_by_fulfilment.get(
+            fulfilment_id,
+            0,
+        )
+
+        if item_count <= 0:
+            raise ValueError(
+                "No order items found for fulfilment "
+                f"{fulfilment_id}"
+            )
+
         picking_completed_at = (
             picking_started_at
-            + generate_picking_duration(order)
+            + generate_picking_duration(
+                item_count=item_count,
+                pickers_available=pickers_available,
+                pickers_scheduled=pickers_scheduled,
+            )
         )
 
         add_event(
@@ -445,7 +621,10 @@ def generate_operational_events(
 
         packing_completed_at = (
             packing_started_at
-            + generate_packing_duration()
+            + generate_packing_duration(
+                packers_available=packers_available,
+                packers_scheduled=packers_scheduled,
+            )
         )
 
         add_event(
@@ -529,29 +708,60 @@ def generate_operational_events(
             "delivery_id"
         ]
 
-        delivery_assignments = (
-            assignments_by_delivery.get(
-                delivery_id,
-                [],
+        # The delivery request is created before rider acceptance.
+        # Rider assignment now happens here, at the correct
+        # point in the operational lifecycle.
+        assignment_offered_at = (
+            packing_completed_at
+            + timedelta(
+                seconds=random.randint(
+                    30,
+                    120,
+                )
             )
         )
 
-        accepted_assignment = next(
+        store = next(
             (
-                assignment
-                for assignment
-                in delivery_assignments
-                if assignment["response"]
-                == "ACCEPTED"
+                store
+                for store in stores
+                if store["store_id"] == store_id
             ),
             None,
         )
 
-        # No rider accepted the request.
-        if accepted_assignment is None:
+        if store is None:
+            raise ValueError(
+                f"Store not found: {store_id}"
+            )
+
+        (
+            assignment_attempts,
+            accepted_rider_id,
+            accepted_at,
+            assignment_counter,
+        ) = generate_assignment_attempts(
+            delivery=delivery,
+            fulfilment=fulfilment,
+            store=store,
+            riders=riders,
+            rider_available_at=rider_available_at,
+            assignment_counter=assignment_counter,
+            offered_at=assignment_offered_at,
+        )
+
+        updated_assignments.extend(
+            assignment_attempts
+        )
+
+        # -----------------------------------------------------
+        # No rider accepted
+        # -----------------------------------------------------
+
+        if accepted_rider_id is None:
 
             failure_time = (
-                packing_completed_at
+                assignment_offered_at
                 + timedelta(
                     minutes=random.randint(
                         2,
@@ -597,43 +807,12 @@ def generate_operational_events(
             continue
 
         # -----------------------------------------------------
-        # Important timing correction
+        # Rider accepted
         # -----------------------------------------------------
 
-        # The assignment generator was initially independent
-        # of packing. We now make the accepted assignment occur
-        # after packing is complete.
-        #
-        # This keeps the operational timeline coherent while
-        # we eventually move assignment generation fully into
-        # the lifecycle engine.
+        rider_id = accepted_rider_id
 
-        rider_assigned_at = max(
-            packing_completed_at
-            + timedelta(
-                seconds=random.randint(
-                    30,
-                    120,
-                )
-            ),
-            parse_timestamp(
-                accepted_assignment[
-                    "responded_at"
-                ]
-            ),
-        )
-
-        # Update the assignment record so its timestamp agrees
-        # with the operational lifecycle.
-        accepted_assignment[
-            "responded_at"
-        ] = format_timestamp(
-            rider_assigned_at
-        )
-
-        rider_id = accepted_assignment[
-            "rider_id"
-        ]
+        rider_assigned_at = accepted_at
 
         add_event(
             event_type="RIDER_ASSIGNED",
@@ -653,7 +832,7 @@ def generate_operational_events(
 
         delivery["rider_id"] = rider_id
 
-        # -----------------------------------------------------
+                # -----------------------------------------------------
         # Rider arrival
         # -----------------------------------------------------
 
@@ -675,6 +854,12 @@ def generate_operational_events(
             delivery_id=delivery_id,
             store_id=store_id,
             rider_id=rider_id,
+        )
+
+        delivery[
+            "rider_arrived_at_store"
+        ] = format_timestamp(
+            rider_arrived_at_store
         )
 
         # -----------------------------------------------------
@@ -827,6 +1012,12 @@ def generate_operational_events(
                 delivered_at
             )
         )
+
+        # Rider becomes available again once
+        # this delivery has completed.
+        rider_available_at[
+            rider_id
+        ] = delivered_at
 
     # ---------------------------------------------------------
     # Derive final order state
@@ -1153,6 +1344,7 @@ def save_assignments(
         "rider_id",
         "offered_at",
         "responded_at",
+        "expired_at",
         "response",
         "rejection_reason",
     ]
@@ -1176,7 +1368,9 @@ def save_assignments(
 
 if __name__ == "__main__":
 
-    orders = load_csv("orders.csv")
+    orders = load_csv(
+        "orders.csv"
+    )
 
     fulfilment_units = load_csv(
         "fulfilment_units.csv"
@@ -1186,8 +1380,12 @@ if __name__ == "__main__":
         "deliveries.csv"
     )
 
-    assignments = load_csv(
-        "rider_assignments.csv"
+    riders = load_csv(
+        "riders.csv"
+    )
+
+    stores = load_csv(
+        "stores.csv"
     )
 
     (
@@ -1200,17 +1398,24 @@ if __name__ == "__main__":
         orders=orders,
         fulfilment_units=fulfilment_units,
         deliveries=deliveries,
-        assignments=assignments,
+        riders=riders,
+        stores=stores,
     )
 
     save_events(events)
-    save_orders(updated_orders)
+
+    save_orders(
+        updated_orders
+    )
+
     save_fulfilment_units(
         updated_fulfilments
     )
+
     save_deliveries(
         updated_deliveries
     )
+
     save_assignments(
         updated_assignments
     )

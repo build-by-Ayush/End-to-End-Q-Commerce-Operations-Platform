@@ -22,77 +22,167 @@ PRODUCT_IDS = [
 def generate_order_items(
     orders: list[dict],
     fulfilment_units: list[dict],
+    product_count: int = 100,
 ) -> list[dict]:
     """
-    Generate item lines for orders.
+    Generate order-item rows while guaranteeing that every
+    fulfilment unit receives at least one item.
 
-    Each order receives a basket of 1-10 distinct item lines.
-    Every item line is assigned to one fulfilment unit belonging
-    to the same parent order.
+    Each order item belongs to:
+        one order
+        one fulfilment unit
+        one product
     """
+
     if not orders:
-        raise ValueError("Orders cannot be empty.")
+        raise ValueError(
+            "Orders cannot be empty."
+        )
 
     if not fulfilment_units:
-        raise ValueError("Fulfilment units cannot be empty.")
+        raise ValueError(
+            "Fulfilment units cannot be empty."
+        )
 
-    # Group fulfilment units by order for fast lookup.
-    fulfilments_by_order: dict[str, list[dict]] = {}
+    if product_count <= 0:
+        raise ValueError(
+            "Product count must be greater than zero."
+        )
+
+    fulfilments_by_order: dict[
+        str,
+        list[dict],
+    ] = {}
 
     for fulfilment in fulfilment_units:
-        order_id = fulfilment["order_id"]
-
-        fulfilments_by_order.setdefault(order_id, []).append(
+        fulfilments_by_order.setdefault(
+            fulfilment["order_id"],
+            [],
+        ).append(
             fulfilment
         )
 
-    order_items = []
+    order_items: list[dict] = []
     item_counter = 1
 
     for order in orders:
+
         order_id = order["order_id"]
 
-        units = fulfilments_by_order.get(order_id)
-
-        # Cancelled/failed orders may have no fulfilment unit.
-        if not units:
-            continue
-
-        # Only use fulfilment units that are actually progressing.
-        active_units = [
-            unit
-            for unit in units
-            if unit["status"] == "PENDING"
-        ]
-
-        if not active_units:
-            continue
-
-        # Basket size is generated at the order level.
-        item_line_count = random.randint(1, 10)
-
-        selected_products = random.sample(
-            PRODUCT_IDS,
-            k=min(item_line_count, len(PRODUCT_IDS)),
+        order_fulfilments = (
+            fulfilments_by_order.get(
+                order_id,
+                [],
+            )
         )
 
-        for product_id in selected_products:
-            fulfilment_unit = random.choice(active_units)
+        if not order_fulfilments:
+            raise ValueError(
+                f"No fulfilment units found for "
+                f"order {order_id}"
+            )
 
-            quantity = random.choices(
-                population=[1, 2, 3, 4],
-                weights=[60, 25, 10, 5],
-                k=1,
-            )[0]
+        # -----------------------------------------------------
+        # Determine number of item lines.
+        #
+        # We need at least one item line per fulfilment unit.
+        # -----------------------------------------------------
+
+        minimum_items = len(
+            order_fulfilments
+        )
+
+        additional_items = random.randint(
+            0,
+            6,
+        )
+
+        item_line_count = (
+            minimum_items
+            + additional_items
+        )
+
+        # -----------------------------------------------------
+        # First guarantee one item per fulfilment unit.
+        # -----------------------------------------------------
+
+        assigned_fulfilments = (
+            order_fulfilments.copy()
+        )
+
+        for fulfilment in assigned_fulfilments:
+
+            product_number = random.randint(
+                1,
+                product_count,
+            )
+
+            quantity = random.randint(
+                1,
+                3,
+            )
 
             order_items.append(
                 {
-                    "order_item_id": f"OI-{item_counter:07d}",
+                    "order_item_id": (
+                        f"OI-{item_counter:07d}"
+                    ),
                     "order_id": order_id,
                     "fulfilment_unit_id": (
-                        fulfilment_unit["fulfilment_unit_id"]
+                        fulfilment[
+                            "fulfilment_unit_id"
+                        ]
                     ),
-                    "product_id": product_id,
+                    "product_id": (
+                        f"PROD-{product_number:03d}"
+                    ),
+                    "quantity": quantity,
+                }
+            )
+
+            item_counter += 1
+
+        # -----------------------------------------------------
+        # Assign remaining item lines randomly.
+        # -----------------------------------------------------
+
+        remaining_items = (
+            item_line_count
+            - minimum_items
+        )
+
+        for _ in range(
+            remaining_items
+        ):
+
+            fulfilment = random.choice(
+                order_fulfilments
+            )
+
+            product_number = random.randint(
+                1,
+                product_count,
+            )
+
+            quantity = random.randint(
+                1,
+                3,
+            )
+
+            order_items.append(
+                {
+                    "order_item_id": (
+                        f"OI-{item_counter:07d}"
+                    ),
+                    "order_id": order_id,
+                    "fulfilment_unit_id": (
+                        fulfilment[
+                            "fulfilment_unit_id"
+                        ]
+                    ),
+                    "product_id": (
+                        f"PROD-{product_number:03d}"
+                    ),
                     "quantity": quantity,
                 }
             )
@@ -100,7 +190,6 @@ def generate_order_items(
             item_counter += 1
 
     return order_items
-
 
 def save_order_items(order_items: list[dict]) -> None:
     output_dir = Path(__file__).parent.parent / "datasets"

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from simulator.config import CONFIG
 from simulator.state import SimulationState
+from simulator.validation import validate_state
 
 from simulator.customers import generate_customers
 from simulator.stores import generate_stores
@@ -14,9 +15,6 @@ from simulator.orders import generate_orders
 from simulator.fulfilment_units import generate_fulfilment_units
 from simulator.order_items import generate_order_items
 from simulator.deliveries import generate_deliveries
-from simulator.rider_assignments import (
-    generate_assignment_attempts,
-)
 from simulator.operational_events import (
     generate_operational_events,
 )
@@ -187,19 +185,19 @@ def save_all_datasets(
     )
 
     save_csv(
-        "rider_assignments.csv",
-        state.rider_assignments,
-        [
-            "assignment_id",
-            "delivery_id",
-            "rider_id",
-            "offered_at",
-            "responded_at",
-            "expired_at",
-            "response",
-            "rejection_reason",
-        ],
-    )
+    "rider_assignments.csv",
+    state.rider_assignments,
+    [
+        "assignment_id",
+        "delivery_id",
+        "rider_id",
+        "offered_at",
+        "responded_at",
+        "expired_at",
+        "response",
+        "rejection_reason",
+    ],
+)
 
     save_csv(
         "operational_events.csv",
@@ -319,13 +317,12 @@ def run_simulation() -> SimulationState:
 
     print("\n[6/10] Order Items")
 
-    state.order_items = (
-        generate_order_items(
-            orders=state.orders,
-            fulfilment_units=(
-                state.fulfilment_units
-            ),
-        )
+    state.order_items = generate_order_items(
+        orders=state.orders,
+        fulfilment_units=(
+            state.fulfilment_units
+        ),
+        product_count=CONFIG.products,
     )
 
     print(
@@ -364,12 +361,12 @@ def run_simulation() -> SimulationState:
         state.rider_assignments,
     ) = generate_operational_events(
         orders=state.orders,
-        fulfilment_units=(
-            state.fulfilment_units
-        ),
+        fulfilment_units=state.fulfilment_units,
+        order_items=state.order_items,
         deliveries=state.deliveries,
         riders=state.riders,
         stores=state.stores,
+        store_staffing=state.store_staffing,
     )
 
     print(
@@ -395,7 +392,7 @@ def run_simulation() -> SimulationState:
                 0,
                 0,
             ),
-            hours=24,
+            hours=CONFIG.staffing_hours,
         )
     )
 
@@ -407,6 +404,21 @@ def run_simulation() -> SimulationState:
     # ---------------------------------------------------------
     # Save final state
     # ---------------------------------------------------------
+
+    print("\n" + "-" * 60)
+    print("Validating simulation...")
+    print("-" * 60)
+
+    validation_result = validate_state(state)
+
+    validation_result.print_report()
+
+    if not validation_result.passed:
+        print(
+            "\nSimulation failed validation."
+            "\nDatasets will NOT be saved."
+        )
+        return state
 
     print("\n" + "-" * 60)
     print("Saving final datasets...")
