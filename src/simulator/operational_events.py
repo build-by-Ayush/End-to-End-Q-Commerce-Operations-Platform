@@ -190,8 +190,9 @@ def get_staffing_at_time(
 
     if not observations:
         raise ValueError(
-            f"No staffing observations found for "
-            f"store {store_id}"
+            f"No staffing observations found for store {store_id}. "
+            f"Available staffing store IDs: "
+            f"{sorted({row['store_id'] for row in store_staffing})}"
         )
 
     observations.sort(
@@ -219,6 +220,148 @@ def get_staffing_at_time(
         latest_observation = observations[0]
 
     return latest_observation
+
+def generate_transit_duration(
+    distance_km: float,
+    traffic_condition: str,
+    weather_condition: str,
+) -> timedelta:
+    """
+    Generate last-mile transit duration.
+
+    Distance establishes the baseline.
+    Traffic and weather modify it.
+    Random variation keeps the relationship probabilistic.
+    """
+
+    if distance_km <= 0:
+        raise ValueError(
+            "distance_km must be greater than zero."
+        )
+
+    average_speed_kmh = random.uniform(
+        20,
+        25,
+    )
+
+    base_minutes = (
+        distance_km
+        / average_speed_kmh
+        * 60
+    )
+
+    traffic_multiplier = {
+        "LOW": 0.90,
+        "MODERATE": 1.00,
+        "HIGH": 1.20,
+        "SEVERE": 1.40,
+    }.get(
+        traffic_condition,
+        1.00,
+    )
+
+    weather_multiplier = {
+        "CLEAR": 1.00,
+        "CLOUDY": 1.02,
+        "RAIN": 1.15,
+    }.get(
+        weather_condition,
+        1.00,
+    )
+
+    random_variation_minutes = random.uniform(
+        0.5,
+        1.5,
+    )
+
+    total_minutes = (
+        base_minutes
+        * traffic_multiplier
+        * weather_multiplier
+        + random_variation_minutes
+    )
+
+    return timedelta(
+        minutes=total_minutes
+    )
+
+
+def calculate_store_workload_pressure(
+    store_id: str,
+    assigned_at: datetime,
+    fulfilment_units: list[dict],
+    stores_by_id: dict[str, dict],
+) -> float:
+    """
+    Calculate a lightweight store-pressure factor.
+
+    The factor is based on how many fulfilment units were
+    assigned to the same store within the surrounding hour,
+    normalized against the store's baseline capacity.
+
+    The result is intentionally capped because this is a
+    synthetic portfolio dataset, not a full queueing simulator.
+    """
+
+    store = stores_by_id.get(store_id)
+
+    if store is None:
+        raise ValueError(
+            f"Store not found: {store_id}"
+        )
+
+    baseline_capacity = float(
+        store["baseline_capacity"]
+    )
+
+    if baseline_capacity <= 0:
+        raise ValueError(
+            f"Invalid baseline capacity for "
+            f"store {store_id}"
+        )
+
+    window_start = (
+        assigned_at - timedelta(minutes=30)
+    )
+
+    window_end = (
+        assigned_at + timedelta(minutes=30)
+    )
+
+    nearby_workload = 0
+
+    for fulfilment in fulfilment_units:
+        if fulfilment["store_id"] != store_id:
+            continue
+
+        fulfilment_assigned_at = parse_timestamp(
+            fulfilment["assigned_to_store_at"]
+        )
+
+        if (
+            window_start
+            <= fulfilment_assigned_at
+            <= window_end
+        ):
+            nearby_workload += 1
+
+    # Convert the hourly capacity into a simple
+    # expected workload threshold for the hour.
+    capacity_threshold = max(
+        1.0,
+        baseline_capacity / 4,
+    )
+
+    pressure_ratio = (
+        nearby_workload
+        / capacity_threshold
+    )
+
+    # Keep the effect intentionally small.
+    return min(
+        pressure_ratio,
+        1.0,
+    )
 
 
 def generate_operational_events(
@@ -255,6 +398,11 @@ def generate_operational_events(
     deliveries_by_fulfilment = {
         delivery["fulfilment_unit_id"]: delivery
         for delivery in deliveries
+    }
+
+    stores_by_id = {
+        store["store_id"]: store
+        for store in stores
     }
 
     items_by_fulfilment: dict[str, int] = {}
@@ -444,12 +592,31 @@ def generate_operational_events(
 
         outcome = choose_fulfilment_outcome()
 
+        store_pressure = calculate_store_workload_pressure(
+            store_id=store_id,
+            assigned_at=assigned_to_store_at,
+            fulfilment_units=fulfilment_units,
+            stores_by_id=stores_by_id,
+        )
+
+        base_wait_seconds = random.randint(
+            60,
+            180,
+        )
+
+        pressure_delay_seconds = int(
+            store_pressure * random.randint(
+                30,
+                120,
+            )
+        )
+
         picking_started_at = (
             assigned_to_store_at
             + timedelta(
-                seconds=random.randint(
-                    60,
-                    180,
+                seconds=(
+                    base_wait_seconds
+                    + pressure_delay_seconds
                 )
             )
         )
@@ -934,49 +1101,21 @@ def generate_operational_events(
         # Transit
         # -----------------------------------------------------
 
-        base_transit_minutes = random.uniform(
-            3,
-            9,
+        transit_duration = generate_transit_duration(
+            distance_km=float(
+                delivery["delivery_distance"]
+            ),
+            traffic_condition=(
+                delivery["traffic_condition"]
+            ),
+            weather_condition=(
+                delivery["weather_condition"]
+            ),
         )
-
-        if delivery[
-            "traffic_condition"
-        ] == "HIGH":
-
-            base_transit_minutes += (
-                random.uniform(
-                    2,
-                    5,
-                )
-            )
-
-        elif delivery[
-            "traffic_condition"
-        ] == "SEVERE":
-
-            base_transit_minutes += (
-                random.uniform(
-                    5,
-                    10,
-                )
-            )
-
-        if delivery[
-            "weather_condition"
-        ] == "RAIN":
-
-            base_transit_minutes += (
-                random.uniform(
-                    1,
-                    4,
-                )
-            )
 
         delivered_at = (
             delivery_started_at
-            + timedelta(
-                minutes=base_transit_minutes
-            )
+            + transit_duration
         )
 
         # -----------------------------------------------------

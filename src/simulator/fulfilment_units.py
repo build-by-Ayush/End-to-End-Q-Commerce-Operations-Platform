@@ -20,25 +20,16 @@ def choose_store(
     stores: list[dict],
 ) -> dict:
     """
-    Select an active store in the order's delivery zone.
+    Select an eligible store for an order.
 
-    Same-zone stores are preferred.
+    Stores are ranked primarily by geographic proximity to the
+    order's delivery location. A small amount of randomness
+    prevents the simulator from behaving deterministically.
     """
 
-    same_zone_stores = [
-        store
-        for store in stores
-        if (
-            store["zone"]
-            == order["delivery_zone"]
-            and store["status"]
-            == "ACTIVE"
-        )
-    ]
-
-    if same_zone_stores:
-        return random.choice(
-            same_zone_stores
+    if not stores:
+        raise ValueError(
+            "Stores cannot be empty."
         )
 
     active_stores = [
@@ -52,10 +43,59 @@ def choose_store(
             "No active stores available."
         )
 
-    return random.choice(
-        active_stores
+    order_latitude = float(
+        order["delivery_latitude"]
     )
 
+    order_longitude = float(
+        order["delivery_longitude"]
+    )
+
+    def squared_distance(
+        store: dict,
+    ) -> float:
+        store_latitude = float(
+            store["latitude"]
+        )
+
+        store_longitude = float(
+            store["longitude"]
+        )
+
+        return (
+            (
+                store_latitude
+                - order_latitude
+            )
+            ** 2
+            + (
+                store_longitude
+                - order_longitude
+            )
+            ** 2
+        )
+
+    ranked_stores = sorted(
+        active_stores,
+        key=squared_distance,
+    )
+
+    # Usually select one of the closest stores.
+    # Occasionally allow a less-near eligible store so
+    # the simulation isn't perfectly deterministic.
+    top_n = min(
+        3,
+        len(ranked_stores),
+    )
+
+    if random.random() < 0.85:
+        return random.choice(
+            ranked_stores[:top_n]
+        )
+
+    return random.choice(
+        ranked_stores
+    )
 
 def choose_second_store(
     first_store: dict,
@@ -63,11 +103,13 @@ def choose_second_store(
     stores: list[dict],
 ) -> dict | None:
     """
-    Choose another active store in the same
-    delivery zone for split fulfilment.
+    Select a second active store for split fulfilment.
+
+    The second store must be different from the first and
+    should still be geographically reasonable for the order.
     """
 
-    alternatives = [
+    active_alternatives = [
         store
         for store in stores
         if (
@@ -75,18 +117,49 @@ def choose_second_store(
             != first_store["store_id"]
             and store["status"]
             == "ACTIVE"
-            and store["zone"]
-            == order["delivery_zone"]
         )
     ]
 
-    if not alternatives:
+    if not active_alternatives:
         return None
 
-    return random.choice(
-        alternatives
+    order_latitude = float(
+        order["delivery_latitude"]
     )
 
+    order_longitude = float(
+        order["delivery_longitude"]
+    )
+
+    def squared_distance(
+        store: dict,
+    ) -> float:
+        return (
+            (
+                float(store["latitude"])
+                - order_latitude
+            )
+            ** 2
+            + (
+                float(store["longitude"])
+                - order_longitude
+            )
+            ** 2
+        )
+
+    ranked_stores = sorted(
+        active_alternatives,
+        key=squared_distance,
+    )
+
+    top_n = min(
+        5,
+        len(ranked_stores),
+    )
+
+    return random.choice(
+        ranked_stores[:top_n]
+    )
 
 def generate_fulfilment_units(
     orders: list[dict],

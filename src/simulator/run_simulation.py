@@ -347,8 +347,34 @@ def run_simulation() -> SimulationState:
         f"{len(state.deliveries):,}"
     )
 
+        # ---------------------------------------------------------
+    # 3. Store staffing
     # ---------------------------------------------------------
-    # 3. Lifecycle engine
+
+    print("\n[8/10] Store Staffing")
+
+    state.store_staffing = (
+        generate_store_staffing(
+            stores=state.stores,
+            start_datetime=datetime(
+                2026,
+                8,
+                15,
+                0,
+                0,
+                0,
+            ),
+            hours=CONFIG.staffing_hours,
+        )
+    )
+
+    print(
+        f"  Generated: "
+        f"{len(state.store_staffing):,}"
+    )
+
+    # ---------------------------------------------------------
+    # 4. Lifecycle engine
     # ---------------------------------------------------------
 
     print("\n[9/10] Operational Lifecycle")
@@ -376,33 +402,7 @@ def run_simulation() -> SimulationState:
     )
 
     # ---------------------------------------------------------
-    # 4. Store staffing
-    # ---------------------------------------------------------
-
-    print("\n[10/10] Store Staffing")
-
-    state.store_staffing = (
-        generate_store_staffing(
-            stores=state.stores,
-            start_datetime=datetime(
-                2026,
-                8,
-                15,
-                0,
-                0,
-                0,
-            ),
-            hours=CONFIG.staffing_hours,
-        )
-    )
-
-    print(
-        f"  Generated: "
-        f"{len(state.store_staffing):,}"
-    )
-
-    # ---------------------------------------------------------
-    # Save final state
+    # 5. Validation
     # ---------------------------------------------------------
 
     print("\n" + "-" * 60)
@@ -419,6 +419,10 @@ def run_simulation() -> SimulationState:
             "\nDatasets will NOT be saved."
         )
         return state
+
+    # ---------------------------------------------------------
+    # Save final state
+    # ---------------------------------------------------------
 
     print("\n" + "-" * 60)
     print("Saving final datasets...")

@@ -18,5 +18,9 @@ class SimulationConfig:
     staffing_interval_hours: int = 1
     staffing_hours: int = 24
 
+    # Operational SLA
+    sla_target_minutes: int = 20
+    sla_grace_minutes: int = 5
+
 
 CONFIG = SimulationConfig()
