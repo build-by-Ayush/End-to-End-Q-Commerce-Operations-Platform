@@ -395,11 +395,6 @@ def generate_operational_events(
         for order in orders
     }
 
-    deliveries_by_fulfilment = {
-        delivery["fulfilment_unit_id"]: delivery
-        for delivery in deliveries
-    }
-
     stores_by_id = {
         store["store_id"]: store
         for store in stores
@@ -434,6 +429,11 @@ def generate_operational_events(
         dict(delivery)
         for delivery in deliveries
     ]
+
+    deliveries_by_fulfilment = {
+        delivery["fulfilment_unit_id"]: delivery
+        for delivery in updated_deliveries
+    }
 
     # Rider assignments are now generated inside the
     # lifecycle engine rather than passed in from outside.

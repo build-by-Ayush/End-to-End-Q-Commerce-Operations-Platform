@@ -1067,14 +1067,28 @@ def validate_event_presence(
                     f"event {event_type}"
                 )
 
-        if status == "FAILED":
+                if status == "FAILED":
 
-            if "DELIVERY_FAILED" not in event_types:
-                result.error(
-                    "deliveries: FAILED delivery "
-                    f"{delivery_id} has no "
-                    "DELIVERY_FAILED event"
-                )
+                    has_delivery_failure = (
+                        "DELIVERY_FAILED"
+                        in event_types
+                    )
+
+                    has_fulfilment_failure = (
+                        "FULFILMENT_FAILED"
+                        in event_types
+                    )
+
+                    if not (
+                        has_delivery_failure
+                        or has_fulfilment_failure
+                    ):
+                        result.error(
+                            "deliveries: FAILED delivery "
+                            f"{delivery_id} has neither "
+                            "DELIVERY_FAILED nor "
+                            "FULFILMENT_FAILED event"
+                        )
 
 
 def validate_rider_concurrency(
