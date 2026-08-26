@@ -3,22 +3,37 @@ from dataclasses import dataclass
 
 @dataclass
 class SimulationConfig:
-    # Root entity counts
-    customers: int = 100
-    stores: int = 20
-    riders: int = 50
+    # ---------------------------------------------------------
+    # Root / reference data
+    # ---------------------------------------------------------
 
+    customers: int = 1_000_000
+    stores: int = 120
+    riders: int = 2_000
+
+    # ---------------------------------------------------------
     # Transaction volume
-    orders: int = 100
+    # ---------------------------------------------------------
 
-    # Product pool
+    orders: int = 500_000
+
+    # ---------------------------------------------------------
+    # Lightweight product reference pool
+    # ---------------------------------------------------------
+
     products: int = 100
 
-    # Store staffing
+    # ---------------------------------------------------------
+    # Simulation period / staffing
+    # ---------------------------------------------------------
+
     staffing_interval_hours: int = 1
     staffing_hours: int = 24
 
+    # ---------------------------------------------------------
     # Operational SLA
+    # ---------------------------------------------------------
+
     sla_target_minutes: int = 20
     sla_grace_minutes: int = 5
 
