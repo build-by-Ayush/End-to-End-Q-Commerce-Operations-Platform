@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import random
+from datetime import datetime
 from pathlib import Path
 
 
@@ -118,8 +119,6 @@ TIMESTAMP_FIELDS = {
 }
 
 
-# These are optional/contextual fields where a blank value
-# is already semantically possible.
 NULLABLE_FIELDS = {
     "stores.csv": [
         "closed_at",
@@ -163,57 +162,13 @@ TIMESTAMP_FORMATS = [
 ]
 
 
-def load_csv(
-    file_path: Path,
-) -> tuple[list[dict], list[str]]:
-    """Load a CSV file and preserve its column order."""
-
-    with file_path.open(
-        "r",
-        newline="",
-        encoding="utf-8",
-    ) as file:
-
-        reader = csv.DictReader(file)
-
-        rows = list(reader)
-        fieldnames = reader.fieldnames or []
-
-    return rows, fieldnames
-
-
-def save_csv(
-    file_path: Path,
-    rows: list[dict],
-    fieldnames: list[str],
-) -> None:
-    """Save rows to CSV."""
-
-    file_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    with file_path.open(
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as file:
-
-        writer = csv.DictWriter(
-            file,
-            fieldnames=fieldnames,
-        )
-
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 def corrupt_text(
     value: str,
     rng: random.Random,
 ) -> str:
-    """Apply one simple textual-quality problem."""
+    """
+    Apply one technical text-quality problem.
+    """
 
     if not value:
         return value
@@ -245,18 +200,20 @@ def corrupt_timestamp(
     value: str,
     rng: random.Random,
 ) -> str:
-    """Convert a clean timestamp into another valid-looking format."""
+    """
+    Convert a clean timestamp into another
+    valid-looking textual representation.
+    """
 
     if not value:
         return value
-
-    from datetime import datetime
 
     try:
         parsed = datetime.strptime(
             value,
             "%Y-%m-%d %H:%M:%S",
         )
+
     except ValueError:
         return value
 
@@ -273,7 +230,10 @@ def corrupt_nullable_value(
     value: str,
     rng: random.Random,
 ) -> str:
-    """Introduce inconsistent null representation."""
+    """
+    Turn an existing blank value into one of several
+    inconsistent source-system null representations.
+    """
 
     if value:
         return value
@@ -287,51 +247,14 @@ def corrupt_nullable_value(
     )
 
 
-def inject_row_duplicates(
-    rows: list[dict],
-    rng: random.Random,
-) -> list[dict]:
-    """
-    Duplicate a small number of complete records.
-
-    This simulates duplicate ingestion/source delivery.
-    """
-
-    if not rows:
-        return rows
-
-    duplicate_count = max(
-        1,
-        int(
-            len(rows)
-            * DUPLICATE_RATE
-        ),
-    )
-
-    selected_rows = rng.sample(
-        rows,
-        k=min(
-            duplicate_count,
-            len(rows),
-        ),
-    )
-
-    result = list(rows)
-
-    for row in selected_rows:
-        result.append(dict(row))
-
-    rng.shuffle(result)
-
-    return result
-
-
-def corrupt_dataset(
+def corrupt_row(
     filename: str,
-    rows: list[dict],
+    row: dict[str, str],
     rng: random.Random,
-) -> list[dict]:
-    """Apply controlled technical corruption to one dataset."""
+) -> dict[str, str]:
+    """
+    Apply all configured corruption rules to one row.
+    """
 
     text_fields = TEXT_FIELDS.get(
         filename,
@@ -348,81 +271,178 @@ def corrupt_dataset(
         [],
     )
 
-    dirty_rows = [
-        dict(row)
-        for row in rows
-    ]
+    # Work on only the current row.
+    dirty_row = dict(row)
 
-    for row in dirty_rows:
+    # -----------------------------------------------------
+    # Text corruption
+    # -----------------------------------------------------
 
-        # -----------------------------------------------------
-        # Text corruption
-        # -----------------------------------------------------
+    for field in text_fields:
 
-        for field in text_fields:
+        value = dirty_row.get(
+            field,
+            "",
+        )
 
-            value = row.get(field, "")
+        if (
+            value
+            and rng.random()
+            < TEXT_CORRUPTION_RATE
+        ):
+            dirty_row[field] = corrupt_text(
+                value,
+                rng,
+            )
 
-            if (
-                value
-                and rng.random()
-                < TEXT_CORRUPTION_RATE
-            ):
-                row[field] = corrupt_text(
+    # -----------------------------------------------------
+    # Timestamp-format corruption
+    # -----------------------------------------------------
+
+    for field in timestamp_fields:
+
+        value = dirty_row.get(
+            field,
+            "",
+        )
+
+        if (
+            value
+            and rng.random()
+            < TIMESTAMP_CORRUPTION_RATE
+        ):
+            dirty_row[field] = corrupt_timestamp(
+                value,
+                rng,
+            )
+
+    # -----------------------------------------------------
+    # NULL / blank inconsistency
+    # -----------------------------------------------------
+
+    for field in nullable_fields:
+
+        value = dirty_row.get(
+            field,
+            "",
+        )
+
+        if (
+            not value
+            and rng.random()
+            < NULL_CORRUPTION_RATE
+        ):
+            dirty_row[field] = (
+                corrupt_nullable_value(
                     value,
                     rng,
                 )
+            )
 
-        # -----------------------------------------------------
-        # Timestamp-format corruption
-        # -----------------------------------------------------
+    return dirty_row
 
-        for field in timestamp_fields:
 
-            value = row.get(field, "")
+def process_dataset(
+    input_file: Path,
+    output_file: Path,
+    filename: str,
+    rng: random.Random,
+) -> tuple[int, int]:
+    """
+    Stream one clean CSV into one dirty CSV.
+
+    Returns:
+        clean_row_count
+        dirty_row_count
+    """
+
+    clean_count = 0
+    dirty_count = 0
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with (
+        input_file.open(
+            "r",
+            newline="",
+            encoding="utf-8",
+        ) as source_file,
+        output_file.open(
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as target_file,
+    ):
+
+        reader = csv.DictReader(
+            source_file
+        )
+
+        fieldnames = reader.fieldnames or []
+
+        if not fieldnames:
+            raise ValueError(
+                f"No CSV columns found in {input_file}"
+            )
+
+        writer = csv.DictWriter(
+            target_file,
+            fieldnames=fieldnames,
+        )
+
+        writer.writeheader()
+
+        for row in reader:
+
+            clean_count += 1
+
+            dirty_row = corrupt_row(
+                filename=filename,
+                row=row,
+                rng=rng,
+            )
+
+            writer.writerow(
+                dirty_row
+            )
+
+            dirty_count += 1
+
+            # -------------------------------------------------
+            # Duplicate injection
+            #
+            # Instead of selecting duplicate rows from the
+            # entire dataset in memory, probabilistically
+            # duplicate individual rows while streaming.
+            # -------------------------------------------------
 
             if (
-                value
-                and rng.random()
-                < TIMESTAMP_CORRUPTION_RATE
+                rng.random()
+                < DUPLICATE_RATE
             ):
-                row[field] = corrupt_timestamp(
-                    value,
-                    rng,
+                writer.writerow(
+                    dirty_row
                 )
 
-        # -----------------------------------------------------
-        # NULL/blank inconsistency
-        # -----------------------------------------------------
+                dirty_count += 1
 
-        for field in nullable_fields:
-
-            value = row.get(field, "")
-
-            if (
-                not value
-                and rng.random()
-                < NULL_CORRUPTION_RATE
-            ):
-                row[field] = corrupt_nullable_value(
-                    value,
-                    rng,
-                )
-
-    # ---------------------------------------------------------
-    # Duplicate records
-    # ---------------------------------------------------------
-
-    return inject_row_duplicates(
-        dirty_rows,
-        rng,
+    return (
+        clean_count,
+        dirty_count,
     )
 
 
 def inject_dirty_data() -> None:
-    """Create dirty copies of the clean simulator datasets."""
+    """
+    Create dirty copies of the clean simulator datasets
+    without loading entire datasets into memory.
+    """
 
     if not CLEAN_DIR.exists():
+
         raise FileNotFoundError(
             f"Clean dataset directory not found: "
             f"{CLEAN_DIR}"
@@ -441,49 +461,64 @@ def inject_dirty_data() -> None:
     print("DIRTY DATA INJECTION")
     print("=" * 60)
 
+    total_clean_rows = 0
+    total_dirty_rows = 0
+
     for filename in DATASET_FILES:
 
         clean_file = (
             CLEAN_DIR / filename
         )
 
+        dirty_file = (
+            DIRTY_DIR / filename
+        )
+
         if not clean_file.exists():
+
             raise FileNotFoundError(
                 f"Clean dataset not found: "
                 f"{clean_file}"
             )
 
-        rows, fieldnames = load_csv(
-            clean_file
+        clean_count, dirty_count = (
+            process_dataset(
+                input_file=clean_file,
+                output_file=dirty_file,
+                filename=filename,
+                rng=rng,
+            )
         )
 
-        dirty_rows = corrupt_dataset(
-            filename=filename,
-            rows=rows,
-            rng=rng,
-        )
-
-        dirty_file = (
-            DIRTY_DIR / filename
-        )
-
-        save_csv(
-            dirty_file,
-            dirty_rows,
-            fieldnames,
-        )
+        total_clean_rows += clean_count
+        total_dirty_rows += dirty_count
 
         print(
             f"{filename:<30}"
-            f"{len(rows):>7} clean  →  "
-            f"{len(dirty_rows):>7} dirty"
+            f"{clean_count:>10,} clean  →  "
+            f"{dirty_count:>10,} dirty"
         )
 
-    print("\nDirty datasets saved to:")
+    print(
+        f"\nTotal clean rows: "
+        f"{total_clean_rows:,}"
+    )
+
+    print(
+        f"Total dirty rows: "
+        f"{total_dirty_rows:,}"
+    )
+
+    print(
+        "\nDirty datasets saved to:"
+    )
+
     print(DIRTY_DIR)
 
     print("\n" + "=" * 60)
-    print("DIRTY DATA INJECTION COMPLETE")
+    print(
+        "DIRTY DATA INJECTION COMPLETE"
+    )
     print("=" * 60)
 
 

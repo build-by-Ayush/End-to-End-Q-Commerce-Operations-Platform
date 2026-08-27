@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import random
+from bisect import bisect_left, bisect_right
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -172,54 +173,118 @@ def choose_fulfilment_outcome() -> str:
     return "NORMAL"
 
 
+def build_staffing_index(
+    store_staffing: list[dict],
+) -> dict[
+    str,
+    tuple[
+        list[datetime],
+        list[dict],
+    ],
+]:
+    """
+    Build a chronological staffing index for each store.
+
+    This is created once before lifecycle processing so that
+    staffing lookups are O(log n) instead of repeatedly scanning
+    the entire staffing dataset.
+    """
+
+    grouped: dict[
+        str,
+        list[tuple[datetime, dict]],
+    ] = {}
+
+    for row in store_staffing:
+
+        store_id = row["store_id"]
+
+        recorded_at = parse_timestamp(
+            row["recorded_at"]
+        )
+
+        grouped.setdefault(
+            store_id,
+            [],
+        ).append(
+            (
+                recorded_at,
+                row,
+            )
+        )
+
+    staffing_index: dict[
+        str,
+        tuple[
+            list[datetime],
+            list[dict],
+        ],
+    ] = {}
+
+    for store_id, observations in grouped.items():
+
+        observations.sort(
+            key=lambda item: item[0]
+        )
+
+        timestamps = [
+            observation[0]
+            for observation in observations
+        ]
+
+        rows = [
+            observation[1]
+            for observation in observations
+        ]
+
+        staffing_index[store_id] = (
+            timestamps,
+            rows,
+        )
+
+    return staffing_index
+
+
 def get_staffing_at_time(
     store_id: str,
     timestamp: datetime,
-    store_staffing: list[dict],
+    staffing_index: dict[
+        str,
+        tuple[
+            list[datetime],
+            list[dict],
+        ],
+    ],
 ) -> dict:
     """
-    Get the latest staffing observation for a store
-    at or before the given timestamp.
+    Return the latest staffing observation at or before
+    the requested timestamp.
+
+    If the requested timestamp occurs before the first
+    observation, use the earliest observation.
     """
 
-    observations = [
-        row
-        for row in store_staffing
-        if row["store_id"] == store_id
-    ]
-
-    if not observations:
-        raise ValueError(
-            f"No staffing observations found for store {store_id}. "
-            f"Available staffing store IDs: "
-            f"{sorted({row['store_id'] for row in store_staffing})}"
-        )
-
-    observations.sort(
-        key=lambda row: parse_timestamp(
-            row["recorded_at"]
-        )
+    indexed_data = staffing_index.get(
+        store_id
     )
 
-    latest_observation = None
-
-    for observation in observations:
-
-        recorded_at = parse_timestamp(
-            observation["recorded_at"]
+    if indexed_data is None:
+        raise ValueError(
+            f"No staffing observations found for store "
+            f"{store_id}"
         )
 
-        if recorded_at <= timestamp:
-            latest_observation = observation
-        else:
-            break
+    timestamps, rows = indexed_data
 
-    # If the first staffing record occurs after the
-    # lifecycle timestamp, use the earliest observation.
-    if latest_observation is None:
-        latest_observation = observations[0]
+    position = bisect_right(
+        timestamps,
+        timestamp,
+    ) - 1
 
-    return latest_observation
+    if position < 0:
+        position = 0
+
+    return rows[position]
 
 def generate_transit_duration(
     distance_km: float,
@@ -286,24 +351,68 @@ def generate_transit_duration(
     )
 
 
+def build_workload_index(
+    fulfilment_units: list[dict],
+) -> dict[
+    str,
+    list[datetime],
+]:
+    """
+    Build a sorted list of fulfilment assignment timestamps
+    for each store.
+
+    This allows workload pressure to be calculated using
+    binary searches instead of scanning every fulfilment.
+    """
+
+    workload_index: dict[
+        str,
+        list[datetime],
+    ] = {}
+
+    for fulfilment in fulfilment_units:
+
+        store_id = fulfilment[
+            "store_id"
+        ]
+
+        assigned_at = parse_timestamp(
+            fulfilment[
+                "assigned_to_store_at"
+            ]
+        )
+
+        workload_index.setdefault(
+            store_id,
+            [],
+        ).append(assigned_at)
+
+    for timestamps in workload_index.values():
+        timestamps.sort()
+
+    return workload_index
+
+
 def calculate_store_workload_pressure(
     store_id: str,
     assigned_at: datetime,
-    fulfilment_units: list[dict],
     stores_by_id: dict[str, dict],
+    workload_index: dict[
+        str,
+        list[datetime],
+    ],
 ) -> float:
     """
-    Calculate a lightweight store-pressure factor.
+    Calculate store workload pressure using a pre-built
+    timestamp index.
 
-    The factor is based on how many fulfilment units were
-    assigned to the same store within the surrounding hour,
-    normalized against the store's baseline capacity.
-
-    The result is intentionally capped because this is a
-    synthetic portfolio dataset, not a full queueing simulator.
+    Counts fulfilments assigned to the same store within
+    +/- 30 minutes of the current assignment time.
     """
 
-    store = stores_by_id.get(store_id)
+    store = stores_by_id.get(
+        store_id
+    )
 
     if store is None:
         raise ValueError(
@@ -320,33 +429,39 @@ def calculate_store_workload_pressure(
             f"store {store_id}"
         )
 
+    timestamps = workload_index.get(
+        store_id,
+        [],
+    )
+
+    if not timestamps:
+        return 0.0
+
     window_start = (
-        assigned_at - timedelta(minutes=30)
+        assigned_at
+        - timedelta(minutes=30)
     )
 
     window_end = (
-        assigned_at + timedelta(minutes=30)
+        assigned_at
+        + timedelta(minutes=30)
     )
 
-    nearby_workload = 0
+    left_position = bisect_left(
+        timestamps,
+        window_start,
+    )
 
-    for fulfilment in fulfilment_units:
-        if fulfilment["store_id"] != store_id:
-            continue
+    right_position = bisect_right(
+        timestamps,
+        window_end,
+    )
 
-        fulfilment_assigned_at = parse_timestamp(
-            fulfilment["assigned_to_store_at"]
-        )
+    nearby_workload = (
+        right_position
+        - left_position
+    )
 
-        if (
-            window_start
-            <= fulfilment_assigned_at
-            <= window_end
-        ):
-            nearby_workload += 1
-
-    # Convert the hourly capacity into a simple
-    # expected workload threshold for the hour.
     capacity_threshold = max(
         1.0,
         baseline_capacity / 4,
@@ -357,12 +472,10 @@ def calculate_store_workload_pressure(
         / capacity_threshold
     )
 
-    # Keep the effect intentionally small.
     return min(
         pressure_ratio,
         1.0,
     )
-
 
 def generate_operational_events(
     orders: list[dict],
@@ -399,6 +512,14 @@ def generate_operational_events(
         store["store_id"]: store
         for store in stores
     }
+
+    staffing_index = build_staffing_index(
+        store_staffing
+    )
+
+    workload_index = build_workload_index(
+        fulfilment_units
+    )
 
     items_by_fulfilment: dict[str, int] = {}
 
@@ -448,11 +569,6 @@ def generate_operational_events(
 
     assignment_counter = 1
 
-    events_by_order: dict[
-        str,
-        list[dict],
-    ] = {}
-
     event_counter = 1
 
     def add_event(
@@ -488,12 +604,6 @@ def generate_operational_events(
         }
 
         events.append(event)
-
-        if order_id is not None:
-            events_by_order.setdefault(
-                order_id,
-                [],
-            ).append(event)
 
         event_counter += 1
 
@@ -595,8 +705,8 @@ def generate_operational_events(
         store_pressure = calculate_store_workload_pressure(
             store_id=store_id,
             assigned_at=assigned_to_store_at,
-            fulfilment_units=fulfilment_units,
             stores_by_id=stores_by_id,
+            workload_index=workload_index,
         )
 
         base_wait_seconds = random.randint(
@@ -624,7 +734,7 @@ def generate_operational_events(
         staffing = get_staffing_at_time(
             store_id=store_id,
             timestamp=picking_started_at,
-            store_staffing=store_staffing,
+            staffing_index=staffing_index,
         )
 
         pickers_available = int(
@@ -888,13 +998,8 @@ def generate_operational_events(
             )
         )
 
-        store = next(
-            (
-                store
-                for store in stores
-                if store["store_id"] == store_id
-            ),
-            None,
+        store = stores_by_id.get(
+            store_id
         )
 
         if store is None:
