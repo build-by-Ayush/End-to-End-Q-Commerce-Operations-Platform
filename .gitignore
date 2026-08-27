@@ -23,3 +23,8 @@ logs/
 *.env
 .env
 profiles.yml
+
+# Generated synthetic datasets
+src/datasets/
+src/datasets_dirty/
+
