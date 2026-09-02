@@ -5,12 +5,69 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from simulator.config import CONFIG
 from simulator.geography import BENGALURU_ZONES
 from simulator.time_utils import format_timestamp
 
 
+HOURLY_DEMAND_WEIGHTS = {
+    7: 5.5,
+    8: 5.5,
+    9: 5.0,
+    10: 4.0,
+    11: 6.0,
+    12: 6.5,
+    13: 6.5,
+    14: 5.0,
+    15: 4.0,
+    16: 4.0,
+    17: 5.5,
+    18: 7.5,
+    19: 8.0,
+    20: 8.0,
+    21: 7.0,
+    22: 7.0,
+    23: 5.0,
+}
+
+# Monday through Sunday. The values are relative rather than exact
+# quotas; random sampling preserves daily variation while the caller
+# controls the exact total order count.
+WEEKDAY_DEMAND_WEIGHTS = [
+    0.95,
+    0.98,
+    1.00,
+    1.00,
+    1.05,
+    1.15,
+    1.10,
+]
+
+
+def demand_multiplier_for_hour(hour: int) -> float:
+    """Return the staffing multiplier implied by the order profile."""
+
+    average_hourly_weight = sum(
+        HOURLY_DEMAND_WEIGHTS.values()
+    ) / 24
+
+    return max(
+        0.65,
+        HOURLY_DEMAND_WEIGHTS.get(hour, 0.0)
+        / average_hourly_weight,
+    )
+
+
+def demand_multiplier_for_date(value: datetime) -> float:
+    """Return the planned weekday demand multiplier for a date."""
+
+    return WEEKDAY_DEMAND_WEIGHTS[value.weekday()]
+
+
 def generate_order_created_at(
-    base_date: datetime,
+    simulation_start: datetime,
+    simulation_days: int,
+    latest_created_at: datetime,
 ) -> datetime:
     """
     Generate an order timestamp with realistic demand variation.
@@ -19,30 +76,49 @@ def generate_order_created_at(
     demand periods.
     """
 
-    demand_periods = [
-        (7, 10),    # Morning
-        (11, 14),   # Lunch
-        (17, 22),   # Evening
-        (22, 24),   # Late night
+    if simulation_days <= 0:
+        raise ValueError(
+            "simulation_days must be greater than zero."
+        )
+
+    day_offsets = list(range(simulation_days))
+    day_weights = [
+        demand_multiplier_for_date(
+            simulation_start + timedelta(days=offset)
+        )
+        for offset in day_offsets
     ]
 
-    start_hour, end_hour = random.choice(
-        demand_periods
-    )
+    hours = list(HOURLY_DEMAND_WEIGHTS)
+    hour_weights = [
+        HOURLY_DEMAND_WEIGHTS[hour]
+        for hour in hours
+    ]
 
-    hour = random.randint(
-        start_hour,
-        end_hour - 1,
-    )
+    # The final-day cutoff prevents lifecycle timestamps from leaking
+    # outside the centralized simulation calendar.
+    while True:
+        day_offset = random.choices(
+            day_offsets,
+            weights=day_weights,
+            k=1,
+        )[0]
 
-    minute = random.randint(0, 59)
-    second = random.randint(0, 59)
+        hour = random.choices(
+            hours,
+            weights=hour_weights,
+            k=1,
+        )[0]
 
-    return base_date.replace(
-        hour=hour,
-        minute=minute,
-        second=second,
-    )
+        candidate = simulation_start + timedelta(
+            days=day_offset,
+            hours=hour,
+            minutes=random.randint(0, 59),
+            seconds=random.randint(0, 59),
+        )
+
+        if candidate <= latest_created_at:
+            return candidate
 
 
 def generate_alternate_delivery_location(
@@ -85,7 +161,9 @@ def generate_alternate_delivery_location(
 def generate_orders(
     customers: list[dict],
     count: int = 100,
-    base_date: datetime | None = None,
+    simulation_start: datetime | None = None,
+    simulation_days: int | None = None,
+    lifecycle_buffer_minutes: int | None = None,
 ) -> list[dict]:
     """
     Generate order records using existing customers.
@@ -106,15 +184,29 @@ def generate_orders(
             "Order count must be greater than zero."
         )
 
-    if base_date is None:
-        base_date = datetime(
-            2026,
-            8,
-            15,
-            0,
-            0,
-            0,
+    if simulation_start is None:
+        simulation_start = CONFIG.simulation_start
+
+    if simulation_days is None:
+        simulation_days = CONFIG.simulation_days
+
+    if lifecycle_buffer_minutes is None:
+        lifecycle_buffer_minutes = (
+            CONFIG.lifecycle_buffer_minutes
         )
+
+    if lifecycle_buffer_minutes < 0:
+        raise ValueError(
+            "lifecycle_buffer_minutes cannot be negative."
+        )
+
+    simulation_end = simulation_start + timedelta(
+        days=simulation_days
+    )
+
+    latest_created_at = simulation_end - timedelta(
+        minutes=lifecycle_buffer_minutes
+    )
 
     orders = []
 
@@ -125,7 +217,9 @@ def generate_orders(
         )
 
         created_at = generate_order_created_at(
-            base_date
+            simulation_start=simulation_start,
+            simulation_days=simulation_days,
+            latest_created_at=latest_created_at,
         )
 
         payment_success_at = (

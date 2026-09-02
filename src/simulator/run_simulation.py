@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime
+import random
 from pathlib import Path
 
 from simulator.config import CONFIG
@@ -242,6 +242,8 @@ def run_simulation() -> SimulationState:
     Execute the complete simulator in dependency order.
     """
 
+    random.seed(CONFIG.random_seed)
+
     state = SimulationState()
 
     print("=" * 60)
@@ -294,6 +296,11 @@ def run_simulation() -> SimulationState:
     state.orders = generate_orders(
         customers=state.customers,
         count=CONFIG.orders,
+        simulation_start=CONFIG.simulation_start,
+        simulation_days=CONFIG.simulation_days,
+        lifecycle_buffer_minutes=(
+            CONFIG.lifecycle_buffer_minutes
+        ),
     )
 
     print(
@@ -356,15 +363,11 @@ def run_simulation() -> SimulationState:
     state.store_staffing = (
         generate_store_staffing(
             stores=state.stores,
-            start_datetime=datetime(
-                2026,
-                8,
-                15,
-                0,
-                0,
-                0,
+            start_datetime=CONFIG.simulation_start,
+            hours=CONFIG.simulation_hours,
+            interval_hours=(
+                CONFIG.staffing_interval_hours
             ),
-            hours=CONFIG.staffing_hours,
         )
     )
 

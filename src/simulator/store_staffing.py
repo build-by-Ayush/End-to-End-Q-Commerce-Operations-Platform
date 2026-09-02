@@ -5,8 +5,46 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from simulator.orders import (
+    demand_multiplier_for_date,
+    demand_multiplier_for_hour,
+)
 
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def generate_available_staff(
+    scheduled: int,
+    availability_rates: list[float],
+    weights: list[int],
+) -> int:
+    """Generate a plausible available headcount for one role/hour."""
+
+    if scheduled <= 0:
+        raise ValueError("scheduled staff must be positive.")
+
+    availability_rate = random.choices(
+        population=availability_rates,
+        weights=weights,
+        k=1,
+    )[0]
+
+    if scheduled == 1:
+        # A one-person shift usually has coverage, with a small
+        # probability of a true operational absence.
+        return random.choices(
+            population=[1, 0],
+            weights=[93, 7],
+            k=1,
+        )[0]
+
+    return min(
+        scheduled,
+        max(
+            1,
+            round(scheduled * availability_rate),
+        ),
+    )
 
 
 def load_csv(filename: str) -> list[dict]:
@@ -30,7 +68,8 @@ def load_csv(filename: str) -> list[dict]:
 def generate_store_staffing(
     stores: list[dict],
     start_datetime: datetime,
-    hours: int = 24,
+    hours: int,
+    interval_hours: int = 1,
 ) -> list[dict]:
     """
     Generate hourly staffing observations for every store.
@@ -41,6 +80,19 @@ def generate_store_staffing(
     """
     if not stores:
         raise ValueError("Stores cannot be empty.")
+
+    if hours <= 0:
+        raise ValueError("hours must be greater than zero.")
+
+    if interval_hours <= 0:
+        raise ValueError(
+            "interval_hours must be greater than zero."
+        )
+
+    if hours % interval_hours != 0:
+        raise ValueError(
+            "hours must be divisible by interval_hours."
+        )
 
     staffing = []
     snapshot_counter = 1
@@ -60,21 +112,24 @@ def generate_store_staffing(
             round(baseline_capacity / 60),
         )
 
-        for hour_offset in range(hours):
+        for hour_offset in range(
+            0,
+            hours,
+            interval_hours,
+        ):
             recorded_at = (
                 start_datetime
                 + timedelta(hours=hour_offset)
             )
 
-            hour = recorded_at.hour
-
-            # More planned staff during major demand periods.
-            if 11 <= hour < 14 or 17 <= hour < 22:
-                demand_multiplier = 1.20
-            elif 7 <= hour < 11:
-                demand_multiplier = 1.05
-            else:
-                demand_multiplier = 0.80
+            demand_multiplier = (
+                demand_multiplier_for_hour(
+                    recorded_at.hour
+                )
+                * demand_multiplier_for_date(
+                    recorded_at
+                )
+            )
 
             pickers_scheduled = max(
                 1,
@@ -86,60 +141,18 @@ def generate_store_staffing(
                 round(base_packers * demand_multiplier),
             )
 
-            # Availability is normally high, but occasionally
-            # staffing falls below scheduled capacity.
-            picker_availability_rate = random.choices(
-                population=[
-                    1.00,
-                    0.90,
-                    0.75,
-                    0.60,
-                ],
-                weights=[
-                    55,
-                    25,
-                    15,
-                    5,
-                ],
-                k=1,
-            )[0]
-
-            packer_availability_rate = random.choices(
-                population=[
-                    1.00,
-                    0.90,
-                    0.75,
-                    0.60,
-                ],
-                weights=[
-                    60,
-                    25,
-                    10,
-                    5,
-                ],
-                k=1,
-            )[0]
-
-            pickers_available = min(
-                pickers_scheduled,
-                max(
-                    0,
-                    round(
-                        pickers_scheduled
-                        * picker_availability_rate
-                    ),
-                ),
+            # Availability is normally high, but lower staffing has a
+            # direct, probabilistic effect on fulfilment duration.
+            pickers_available = generate_available_staff(
+                scheduled=pickers_scheduled,
+                availability_rates=[1.00, 0.90, 0.75, 0.60],
+                weights=[55, 25, 15, 5],
             )
 
-            packers_available = min(
-                packers_scheduled,
-                max(
-                    0,
-                    round(
-                        packers_scheduled
-                        * packer_availability_rate
-                    ),
-                ),
+            packers_available = generate_available_staff(
+                scheduled=packers_scheduled,
+                availability_rates=[1.00, 0.90, 0.75, 0.60],
+                weights=[60, 25, 10, 5],
             )
 
             staffing.append(

@@ -62,9 +62,14 @@ def calculate_distance_km(
     # Approximate road-route adjustment.
     road_factor = random.uniform(1.15, 1.40)
 
-    return round(
-        straight_line_distance * road_factor,
-        2,
+    # Rounding very short routes to 0.00 later makes transit-duration
+    # generation fail. A 100 m minimum is a usable same-building route.
+    return max(
+        0.10,
+        round(
+            straight_line_distance * road_factor,
+            2,
+        ),
     )
 
 

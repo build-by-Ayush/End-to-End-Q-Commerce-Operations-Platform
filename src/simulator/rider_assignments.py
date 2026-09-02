@@ -73,50 +73,40 @@ def generate_assignment_attempts(
         if rider["status"] == "ACTIVE"
     ]
 
-    available_riders = [
-        rider
-        for rider in active_riders
-        if rider_available_at[
-            rider["rider_id"]
-        ] <= offered_at
-    ]
-
-    matching_riders = [
-        rider
-        for rider in available_riders
-        if rider["home_zone"] == store["zone"]
-    ]
-
-    candidate_pool = (
-        matching_riders
-        if matching_riders
-        else available_riders
-    )
-
-    if not candidate_pool:
-        return (
-            [],
-            None,
-            None,
-            assignment_counter,
-        )
-
-    candidate_count = min(
-        len(candidate_pool),
-        random.randint(1, 3),
-    )
-
-    candidates = random.sample(
-        candidate_pool,
-        k=candidate_count,
-    )
-
     assignments = []
-
     accepted_rider_id: str | None = None
     accepted_at: datetime | None = None
+    attempted_rider_ids: set[str] = set()
+    next_offered_at = offered_at
+    max_attempts = random.randint(1, 3)
 
-    for candidate in candidates:
+    for _ in range(max_attempts):
+
+        available_riders = [
+            rider
+            for rider in active_riders
+            if (
+                rider["rider_id"] not in attempted_rider_ids
+                and rider_available_at[
+                    rider["rider_id"]
+                ] <= next_offered_at
+            )
+        ]
+
+        # Without rider-location telemetry, home zone is the only
+        # credible proximity proxy. Do not fall back to any rider in
+        # the city and then claim they arrive in one to five minutes.
+        candidate_pool = [
+            rider
+            for rider in available_riders
+            if rider["home_zone"] == store["zone"]
+        ]
+
+        if not candidate_pool:
+            break
+
+        candidate = random.choice(candidate_pool)
+        attempted_rider_ids.add(candidate["rider_id"])
 
         response_roll = random.random()
 
@@ -130,7 +120,7 @@ def generate_assignment_attempts(
             response = "EXPIRED"
 
         response_time = (
-            offered_at
+            next_offered_at
             + timedelta(
                 seconds=random.randint(
                     20,
@@ -175,7 +165,7 @@ def generate_assignment_attempts(
                     candidate["rider_id"]
                 ),
                 "offered_at": format_datetime(
-                    offered_at
+                    next_offered_at
                 ),
                 "responded_at": responded_at,
                 "expired_at": expired_at,
@@ -197,6 +187,12 @@ def generate_assignment_attempts(
             accepted_at = response_time
 
             break
+
+        # A rejected or expired offer is resolved before the next
+        # rider is contacted, preserving a genuine attempt sequence.
+        next_offered_at = response_time + timedelta(
+            seconds=random.randint(10, 30)
+        )
 
     return (
         assignments,
@@ -231,6 +227,7 @@ def save_assignments(
         "rider_id",
         "offered_at",
         "responded_at",
+        "expired_at",
         "response",
         "rejection_reason",
     ]
@@ -349,36 +346,7 @@ def load_csv(
 
 
 if __name__ == "__main__":
-
-    deliveries = load_csv(
-        "deliveries.csv"
-    )
-
-    riders = load_csv(
-        "riders.csv"
-    )
-
-    fulfilment_units = load_csv(
-        "fulfilment_units.csv"
-    )
-
-    stores = load_csv(
-        "stores.csv"
-    )
-
-    assignments, updated_deliveries = (
-        generate_rider_assignments(
-            deliveries=deliveries,
-            riders=riders,
-            fulfilment_units=fulfilment_units,
-            stores=stores,
-        )
-    )
-
-    save_assignments(
-        assignments
-    )
-
-    save_updated_deliveries(
-        updated_deliveries
+    raise SystemExit(
+        "Run simulator.run_simulation for lifecycle-aware "
+        "rider assignment generation."
     )

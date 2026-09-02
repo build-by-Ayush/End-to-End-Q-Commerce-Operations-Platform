@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from simulator.config import CONFIG
 from simulator.state import SimulationState
 from simulator.time_utils import parse_timestamp
 
@@ -330,6 +331,14 @@ def validate_order_item_ownership(
         for row in state.fulfilment_units
     }
 
+    accepted_riders_by_delivery = defaultdict(set)
+
+    for assignment in state.rider_assignments:
+        if assignment["response"] == "ACCEPTED":
+            accepted_riders_by_delivery[
+                assignment["delivery_id"]
+            ].add(assignment["rider_id"])
+
     for item in state.order_items:
 
         fulfilment = fulfilments_by_id.get(
@@ -383,6 +392,79 @@ def validate_fulfilment_item_coverage(
             result.error(
                 "fulfilment_units: fulfilment unit "
                 f"{fulfilment_id} has no order items"
+            )
+
+
+def validate_delivery_cardinality(
+    state: SimulationState,
+    result: ValidationResult,
+) -> None:
+    """Ensure every fulfilment operation has exactly one delivery row."""
+
+    deliveries_by_fulfilment = defaultdict(list)
+
+    for delivery in state.deliveries:
+        deliveries_by_fulfilment[
+            delivery["fulfilment_unit_id"]
+        ].append(delivery["delivery_id"])
+
+    for fulfilment in state.fulfilment_units:
+        fulfilment_id = fulfilment["fulfilment_unit_id"]
+        delivery_ids = deliveries_by_fulfilment.get(
+            fulfilment_id,
+            [],
+        )
+
+        if len(delivery_ids) != 1:
+            result.error(
+                "fulfilment_units: expected exactly one delivery "
+                f"for {fulfilment_id}, found {len(delivery_ids)}"
+            )
+
+
+def validate_order_final_states(
+    state: SimulationState,
+    result: ValidationResult,
+) -> None:
+    """Validate pessimistic parent status for split fulfilment."""
+
+    fulfilments_by_order = defaultdict(list)
+
+    for fulfilment in state.fulfilment_units:
+        fulfilments_by_order[fulfilment["order_id"]].append(
+            fulfilment
+        )
+
+    for order in state.orders:
+        fulfilments = fulfilments_by_order.get(order["order_id"], [])
+
+        if not fulfilments:
+            result.error(
+                "orders: order has no fulfilment units: "
+                f"{order['order_id']}"
+            )
+            continue
+
+        statuses = {
+            fulfilment["status"]
+            for fulfilment in fulfilments
+        }
+
+        if statuses == {"COMPLETED"}:
+            expected_status = "DELIVERED"
+        elif "CANCELLED" in statuses:
+            expected_status = "CANCELLED"
+        elif "FAILED" in statuses:
+            expected_status = "FAILED"
+        else:
+            expected_status = "FULFILLING"
+
+        if order.get("status") != expected_status:
+            result.error(
+                "orders: status does not match fulfilment outcomes "
+                f"for {order['order_id']}: "
+                f"expected {expected_status}, found "
+                f"{order.get('status')}"
             )
 
 
@@ -477,6 +559,147 @@ def validate_timestamps(
                         f"timestamp {column}="
                         f"{value!r}"
                     )
+
+
+def validate_simulation_calendar(
+    state: SimulationState,
+    result: ValidationResult,
+) -> None:
+    """Ensure operational timestamps stay inside the shared calendar."""
+
+    datasets = [
+        ("orders", state.orders, ["created_at", "payment_success_at"]),
+        (
+            "fulfilment_units",
+            state.fulfilment_units,
+            [
+                "assigned_to_store_at",
+                "picking_started_at",
+                "picking_completed_at",
+                "packing_started_at",
+                "packing_completed_at",
+                "cancelled_at",
+                "failed_at",
+                "completed_at",
+            ],
+        ),
+        (
+            "deliveries",
+            state.deliveries,
+            [
+                "rider_arrived_at_store",
+                "picked_up_at",
+                "delivery_started_at",
+                "delivered_at",
+                "cancelled_at",
+                "failed_at",
+            ],
+        ),
+        (
+            "rider_assignments",
+            state.rider_assignments,
+            ["offered_at", "responded_at", "expired_at"],
+        ),
+        ("operational_events", state.operational_events, ["occurred_at"]),
+        ("store_staffing", state.store_staffing, ["recorded_at"]),
+    ]
+
+    for dataset_name, rows, columns in datasets:
+        for row in rows:
+            for column in columns:
+                raw_value = row.get(column)
+
+                if not raw_value:
+                    continue
+
+                try:
+                    value = parse_timestamp(raw_value)
+                except ValueError:
+                    continue
+
+                if not (
+                    CONFIG.simulation_start
+                    <= value
+                    < CONFIG.simulation_end
+                ):
+                    result.error(
+                        f"{dataset_name}: {column} outside "
+                        "simulation calendar for "
+                        f"{row}"
+                    )
+
+
+def validate_store_staffing_coverage(
+    state: SimulationState,
+    result: ValidationResult,
+) -> None:
+    """Validate one coherent staffing observation per store interval."""
+
+    expected_timestamps = {
+        CONFIG.simulation_start + timedelta(
+            hours=offset
+        )
+        for offset in range(
+            0,
+            CONFIG.simulation_hours,
+            CONFIG.staffing_interval_hours,
+        )
+    }
+
+    observations_by_store = defaultdict(list)
+
+    for row in state.store_staffing:
+        try:
+            recorded_at = parse_timestamp(row["recorded_at"])
+        except ValueError:
+            continue
+
+        observations_by_store[row["store_id"]].append(
+            (recorded_at, row)
+        )
+
+        try:
+            pickers_scheduled = int(row["pickers_scheduled"])
+            pickers_available = int(row["pickers_available"])
+            packers_scheduled = int(row["packers_scheduled"])
+            packers_available = int(row["packers_available"])
+        except (TypeError, ValueError):
+            result.error(
+                "store_staffing: non-integer staffing values for "
+                f"{row['staffing_snapshot_id']}"
+            )
+            continue
+
+        if (
+            pickers_scheduled <= 0
+            or packers_scheduled <= 0
+            or pickers_available < 0
+            or packers_available < 0
+            or pickers_available > pickers_scheduled
+            or packers_available > packers_scheduled
+        ):
+            result.error(
+                "store_staffing: invalid scheduled/available "
+                f"counts for {row['staffing_snapshot_id']}"
+            )
+
+    for store in state.stores:
+        store_id = store["store_id"]
+        observations = observations_by_store.get(store_id, [])
+        timestamps = [item[0] for item in observations]
+
+        if len(timestamps) != len(expected_timestamps):
+            result.error(
+                "store_staffing: incorrect observation count for "
+                f"{store_id}: expected {len(expected_timestamps)}, "
+                f"found {len(timestamps)}"
+            )
+
+        if set(timestamps) != expected_timestamps:
+            result.error(
+                "store_staffing: incomplete or duplicate calendar "
+                f"coverage for {store_id}"
+            )
 
 
 def validate_order_lifecycle(
@@ -798,6 +1021,18 @@ def validate_assignment_semantics(
 
         response = assignment["response"]
 
+        if response not in {
+            "ACCEPTED",
+            "REJECTED",
+            "EXPIRED",
+        }:
+            result.error(
+                "rider_assignments: unsupported response "
+                f"{response!r} for "
+                f"{assignment['assignment_id']}"
+            )
+            continue
+
         responded_at = assignment.get(
             "responded_at"
         )
@@ -862,6 +1097,24 @@ def validate_assignment_semantics(
                     f"assignment {assignment['assignment_id']} "
                     "has no expired_at"
                 )
+
+        offered_at_value = parse_optional_timestamp(
+            assignment.get("offered_at")
+        )
+        terminal_raw_value = responded_at or expired_at
+        terminal_value = parse_optional_timestamp(
+            terminal_raw_value
+        )
+
+        if (
+            offered_at_value is not None
+            and terminal_value is not None
+            and terminal_value < offered_at_value
+        ):
+            result.error(
+                "rider_assignments: response precedes offer for "
+                f"{assignment['assignment_id']}"
+            )
 
 
 def validate_assignment_events(
@@ -984,30 +1237,17 @@ def validate_delivery_fulfilment_consistency(
 
         if delivery_rider:
 
-            accepted_assignments = [
-                assignment
-                for assignment
-                in state.rider_assignments
-                if (
-                    assignment["delivery_id"]
-                    == delivery["delivery_id"]
-                    and assignment["response"]
-                    == "ACCEPTED"
-                )
-            ]
+            accepted_riders = accepted_riders_by_delivery.get(
+                delivery["delivery_id"],
+                set(),
+            )
 
-            accepted_riders = {
-                assignment["rider_id"]
-                for assignment
-                in accepted_assignments
-            }
-
-            if delivery_rider not in accepted_riders:
+            if accepted_riders != {delivery_rider}:
                 result.error(
                     "state mismatch: delivery "
                     f"{delivery['delivery_id']} has "
-                    f"rider_id={delivery_rider}, but "
-                    "no matching ACCEPTED assignment"
+                    f"rider_id={delivery_rider}, but accepted "
+                    f"riders are {sorted(accepted_riders)}"
                 )
 
 
@@ -1067,28 +1307,28 @@ def validate_event_presence(
                     f"event {event_type}"
                 )
 
-                if status == "FAILED":
+        if status == "FAILED":
 
-                    has_delivery_failure = (
-                        "DELIVERY_FAILED"
-                        in event_types
-                    )
+            has_delivery_failure = (
+                "DELIVERY_FAILED"
+                in event_types
+            )
 
-                    has_fulfilment_failure = (
-                        "FULFILMENT_FAILED"
-                        in event_types
-                    )
+            has_fulfilment_failure = (
+                "FULFILMENT_FAILED"
+                in event_types
+            )
 
-                    if not (
-                        has_delivery_failure
-                        or has_fulfilment_failure
-                    ):
-                        result.error(
-                            "deliveries: FAILED delivery "
-                            f"{delivery_id} has neither "
-                            "DELIVERY_FAILED nor "
-                            "FULFILMENT_FAILED event"
-                        )
+            if not (
+                has_delivery_failure
+                or has_fulfilment_failure
+            ):
+                result.error(
+                    "deliveries: FAILED delivery "
+                    f"{delivery_id} has neither "
+                    "DELIVERY_FAILED nor "
+                    "FULFILMENT_FAILED event"
+                )
 
 
 def validate_rider_concurrency(
@@ -1096,14 +1336,25 @@ def validate_rider_concurrency(
     result: ValidationResult,
 ) -> None:
     """
-    Check that a rider does not have overlapping
-    completed delivery intervals.
+    Check that a rider does not have overlapping active-delivery
+    intervals. A rider is active from assignment acceptance, not only
+    from last-mile transit.
     """
 
     deliveries_by_rider: dict[
         str,
         list[tuple[datetime, datetime, str]],
     ] = defaultdict(list)
+
+    accepted_at_by_delivery = {}
+
+    for assignment in state.rider_assignments:
+        if assignment["response"] == "ACCEPTED":
+            accepted_at_by_delivery[
+                assignment["delivery_id"]
+            ] = parse_optional_timestamp(
+                assignment.get("responded_at")
+            )
 
     for delivery in state.deliveries:
 
@@ -1112,12 +1363,14 @@ def validate_rider_concurrency(
         if not rider_id:
             continue
 
-        start = parse_optional_timestamp(
-            delivery.get("delivery_started_at")
+        start = accepted_at_by_delivery.get(
+            delivery["delivery_id"]
         )
 
         end = parse_optional_timestamp(
             delivery.get("delivered_at")
+            or delivery.get("failed_at")
+            or delivery.get("cancelled_at")
         )
 
         if start is None or end is None:
@@ -1163,6 +1416,107 @@ def validate_rider_concurrency(
                 )
 
 
+def validate_operational_outcomes(
+    state: SimulationState,
+    result: ValidationResult,
+) -> None:
+    """Check terminal outcomes and derive SLA from PAYMENT_SUCCESS."""
+
+    if not state.deliveries:
+        result.error("deliveries: dataset is empty")
+        return
+
+    fulfilments_by_id = {
+        fulfilment["fulfilment_unit_id"]: fulfilment
+        for fulfilment in state.fulfilment_units
+    }
+    orders_by_id = {
+        order["order_id"]: order
+        for order in state.orders
+    }
+
+    delivered_count = 0
+    on_target_count = 0
+    grace_count = 0
+    breach_count = 0
+
+    for delivery in state.deliveries:
+        status = delivery.get("status")
+
+        if status not in {"DELIVERED", "CANCELLED", "FAILED"}:
+            result.error(
+                "deliveries: non-terminal status for "
+                f"{delivery['delivery_id']}: {status}"
+            )
+            continue
+
+        if status != "DELIVERED":
+            continue
+
+        delivered_count += 1
+
+        fulfilment = fulfilments_by_id.get(
+            delivery["fulfilment_unit_id"]
+        )
+
+        if fulfilment is None:
+            continue
+
+        order = orders_by_id.get(fulfilment["order_id"])
+
+        if order is None:
+            continue
+
+        payment_success_at = parse_optional_timestamp(
+            order.get("payment_success_at")
+        )
+        delivered_at = parse_optional_timestamp(
+            delivery.get("delivered_at")
+        )
+
+        if payment_success_at is None or delivered_at is None:
+            result.error(
+                "deliveries: cannot derive SLA for "
+                f"{delivery['delivery_id']}"
+            )
+            continue
+
+        elapsed_minutes = (
+            delivered_at - payment_success_at
+        ).total_seconds() / 60
+
+        if elapsed_minutes < 0:
+            result.error(
+                "deliveries: delivery precedes payment success for "
+                f"{delivery['delivery_id']}"
+            )
+        elif elapsed_minutes <= CONFIG.sla_target_minutes:
+            on_target_count += 1
+        elif elapsed_minutes <= (
+            CONFIG.sla_target_minutes
+            + CONFIG.sla_grace_minutes
+        ):
+            grace_count += 1
+        else:
+            breach_count += 1
+
+    success_rate = delivered_count / len(state.deliveries)
+
+    if success_rate < 0.80:
+        result.error(
+            "deliveries: successful-delivery rate is below the "
+            f"minimum credible baseline: {success_rate:.1%}"
+        )
+
+    if delivered_count and breach_count / delivered_count > 0.25:
+        result.warning(
+            "deliveries: more than 25% of delivered operations "
+            "breach the 25-minute SLA threshold "
+            f"(on target={on_target_count}, "
+            f"within grace={grace_count}, breach={breach_count})"
+        )
+
+
 def validate_state(
     state: SimulationState,
 ) -> ValidationResult:
@@ -1190,12 +1544,32 @@ def validate_state(
         result,
     )
 
+    validate_delivery_cardinality(
+        state,
+        result,
+    )
+
     validate_timestamps(
         state,
         result,
     )
 
+    validate_simulation_calendar(
+        state,
+        result,
+    )
+
+    validate_store_staffing_coverage(
+        state,
+        result,
+    )
+
     validate_order_lifecycle(
+        state,
+        result,
+    )
+
+    validate_order_final_states(
         state,
         result,
     )
@@ -1231,6 +1605,11 @@ def validate_state(
     )
 
     validate_rider_concurrency(
+        state,
+        result,
+    )
+
+    validate_operational_outcomes(
         state,
         result,
     )

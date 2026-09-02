@@ -260,8 +260,7 @@ def get_staffing_at_time(
     Return the latest staffing observation at or before
     the requested timestamp.
 
-    If the requested timestamp occurs before the first
-    observation, use the earliest observation.
+    The requested time must be covered by the staffing calendar.
     """
 
     indexed_data = staffing_index.get(
@@ -276,13 +275,27 @@ def get_staffing_at_time(
 
     timestamps, rows = indexed_data
 
+    if timestamp < timestamps[0]:
+        raise ValueError(
+            f"Staffing lookup before simulation coverage for "
+            f"store {store_id}: {timestamp}"
+        )
+
+    if len(timestamps) > 1:
+        interval = timestamps[1] - timestamps[0]
+    else:
+        interval = timedelta(hours=1)
+
+    if timestamp >= timestamps[-1] + interval:
+        raise ValueError(
+            f"Staffing lookup after simulation coverage for "
+            f"store {store_id}: {timestamp}"
+        )
+
     position = bisect_right(
         timestamps,
         timestamp,
     ) - 1
-
-    if position < 0:
-        position = 0
 
     return rows[position]
 
@@ -531,7 +544,7 @@ def generate_operational_events(
                 fulfilment_id,
                 0,
             )
-            + 1
+            + int(item["quantity"])
         )
 
     events: list[dict] = []
@@ -559,6 +572,11 @@ def generate_operational_events(
     # Rider assignments are now generated inside the
     # lifecycle engine rather than passed in from outside.
     updated_assignments: list[dict] = []
+
+    # Fulfilment timing is generated independently from dispatch.
+    # Ready deliveries are then dispatched in timestamp order so rider
+    # availability never depends on Python list-generation order.
+    ready_deliveries: list[dict] = []
 
     # Tracks when each rider becomes available again.
     rider_available_at: dict[str, datetime] = {
@@ -986,8 +1004,8 @@ def generate_operational_events(
         ]
 
         # The delivery request is created before rider acceptance.
-        # Rider assignment now happens here, at the correct
-        # point in the operational lifecycle.
+        # Its dispatch timestamp is calculated here and processed
+        # chronologically after all fulfilment timing is known.
         assignment_offered_at = (
             packing_completed_at
             + timedelta(
@@ -1007,6 +1025,49 @@ def generate_operational_events(
                 f"Store not found: {store_id}"
             )
 
+        ready_deliveries.append(
+            {
+                "order": order,
+                "fulfilment": fulfilment,
+                "delivery": delivery,
+                "store": store,
+                "assignment_offered_at": assignment_offered_at,
+                "packing_completed_at": packing_completed_at,
+            }
+        )
+
+        # Dispatch is intentionally deferred until every fulfilment
+        # has a ready timestamp. See the chronological loop below.
+        continue
+
+    # ---------------------------------------------------------
+    # Chronological rider dispatch
+    # ---------------------------------------------------------
+
+    for ready_delivery in sorted(
+        ready_deliveries,
+        key=lambda row: (
+            row["assignment_offered_at"],
+            row["delivery"]["delivery_id"],
+        ),
+    ):
+
+        order = ready_delivery["order"]
+        fulfilment = ready_delivery["fulfilment"]
+        delivery = ready_delivery["delivery"]
+        store = ready_delivery["store"]
+
+        order_id = order["order_id"]
+        fulfilment_id = fulfilment["fulfilment_unit_id"]
+        delivery_id = delivery["delivery_id"]
+        store_id = fulfilment["store_id"]
+        assignment_offered_at = ready_delivery[
+            "assignment_offered_at"
+        ]
+        packing_completed_at = ready_delivery[
+            "packing_completed_at"
+        ]
+
         (
             assignment_attempts,
             accepted_rider_id,
@@ -1022,24 +1083,26 @@ def generate_operational_events(
             offered_at=assignment_offered_at,
         )
 
-        updated_assignments.extend(
-            assignment_attempts
-        )
-
-        # -----------------------------------------------------
-        # No rider accepted
-        # -----------------------------------------------------
+        updated_assignments.extend(assignment_attempts)
 
         if accepted_rider_id is None:
 
-            failure_time = (
-                assignment_offered_at
-                + timedelta(
-                    minutes=random.randint(
-                        2,
-                        5,
-                    )
+            latest_attempt_at = assignment_offered_at
+
+            for attempt in assignment_attempts:
+                terminal_time = (
+                    attempt["responded_at"]
+                    or attempt["expired_at"]
                 )
+
+                if terminal_time:
+                    latest_attempt_at = max(
+                        latest_attempt_at,
+                        parse_timestamp(terminal_time),
+                    )
+
+            failure_time = latest_attempt_at + timedelta(
+                minutes=random.randint(2, 5)
             )
 
             add_event(
@@ -1053,37 +1116,20 @@ def generate_operational_events(
             )
 
             fulfilment["status"] = "FAILED"
-
-            fulfilment["failed_at"] = (
-                format_timestamp(
-                    failure_time
-                )
+            fulfilment["failed_at"] = format_timestamp(
+                failure_time
             )
-
-            fulfilment[
-                "failure_reason"
-            ] = "NO_RIDER_ACCEPTED"
+            fulfilment["failure_reason"] = "NO_RIDER_ACCEPTED"
 
             delivery["status"] = "FAILED"
-
-            delivery["failed_at"] = (
-                format_timestamp(
-                    failure_time
-                )
+            delivery["failed_at"] = format_timestamp(
+                failure_time
             )
-
-            delivery[
-                "failure_reason"
-            ] = "NO_RIDER_ACCEPTED"
+            delivery["failure_reason"] = "NO_RIDER_ACCEPTED"
 
             continue
 
-        # -----------------------------------------------------
-        # Rider accepted
-        # -----------------------------------------------------
-
         rider_id = accepted_rider_id
-
         rider_assigned_at = accepted_at
 
         add_event(
@@ -1096,26 +1142,12 @@ def generate_operational_events(
             rider_id=rider_id,
         )
 
-        fulfilment["status"] = (
-            "READY_FOR_PICKUP"
-        )
-
+        fulfilment["status"] = "READY_FOR_PICKUP"
         delivery["status"] = "ASSIGNED"
-
         delivery["rider_id"] = rider_id
 
-                # -----------------------------------------------------
-        # Rider arrival
-        # -----------------------------------------------------
-
-        rider_arrived_at_store = (
-            rider_assigned_at
-            + timedelta(
-                minutes=random.randint(
-                    1,
-                    5,
-                )
-            )
+        rider_arrived_at_store = rider_assigned_at + timedelta(
+            minutes=random.randint(1, 5)
         )
 
         add_event(
@@ -1128,24 +1160,15 @@ def generate_operational_events(
             rider_id=rider_id,
         )
 
-        delivery[
-            "rider_arrived_at_store"
-        ] = format_timestamp(
+        delivery["rider_arrived_at_store"] = format_timestamp(
             rider_arrived_at_store
         )
-
-        # -----------------------------------------------------
-        # Pickup
-        # -----------------------------------------------------
 
         picked_up_at = max(
             rider_arrived_at_store,
             packing_completed_at,
         ) + timedelta(
-            seconds=random.randint(
-                15,
-                60,
-            )
+            seconds=random.randint(15, 60)
         )
 
         add_event(
@@ -1158,28 +1181,11 @@ def generate_operational_events(
             rider_id=rider_id,
         )
 
-        delivery["picked_up_at"] = (
-            format_timestamp(
-                picked_up_at
-            )
-        )
+        delivery["picked_up_at"] = format_timestamp(picked_up_at)
+        fulfilment["status"] = "HANDED_TO_RIDER"
 
-        fulfilment["status"] = (
-            "HANDED_TO_RIDER"
-        )
-
-        # -----------------------------------------------------
-        # Delivery starts
-        # -----------------------------------------------------
-
-        delivery_started_at = (
-            picked_up_at
-            + timedelta(
-                seconds=random.randint(
-                    15,
-                    90,
-                )
-            )
+        delivery_started_at = picked_up_at + timedelta(
+            seconds=random.randint(15, 90)
         )
 
         add_event(
@@ -1192,40 +1198,18 @@ def generate_operational_events(
             rider_id=rider_id,
         )
 
-        delivery[
-            "delivery_started_at"
-        ] = format_timestamp(
+        delivery["delivery_started_at"] = format_timestamp(
             delivery_started_at
         )
-
-        delivery["status"] = (
-            "IN_TRANSIT"
-        )
-
-        # -----------------------------------------------------
-        # Transit
-        # -----------------------------------------------------
+        delivery["status"] = "IN_TRANSIT"
 
         transit_duration = generate_transit_duration(
-            distance_km=float(
-                delivery["delivery_distance"]
-            ),
-            traffic_condition=(
-                delivery["traffic_condition"]
-            ),
-            weather_condition=(
-                delivery["weather_condition"]
-            ),
+            distance_km=float(delivery["delivery_distance"]),
+            traffic_condition=delivery["traffic_condition"],
+            weather_condition=delivery["weather_condition"],
         )
 
-        delivered_at = (
-            delivery_started_at
-            + transit_duration
-        )
-
-        # -----------------------------------------------------
-        # Delivered
-        # -----------------------------------------------------
+        delivered_at = delivery_started_at + transit_duration
 
         add_event(
             event_type="DELIVERED",
@@ -1237,31 +1221,16 @@ def generate_operational_events(
             rider_id=rider_id,
         )
 
-        delivery["status"] = (
-            "DELIVERED"
-        )
+        delivery["status"] = "DELIVERED"
+        delivery["delivered_at"] = format_timestamp(delivered_at)
 
-        delivery["delivered_at"] = (
-            format_timestamp(
-                delivered_at
-            )
-        )
+        fulfilment["status"] = "COMPLETED"
+        fulfilment["completed_at"] = format_timestamp(delivered_at)
 
-        fulfilment["status"] = (
-            "COMPLETED"
-        )
-
-        fulfilment["completed_at"] = (
-            format_timestamp(
-                delivered_at
-            )
-        )
-
-        # Rider becomes available again once
-        # this delivery has completed.
-        rider_available_at[
-            rider_id
-        ] = delivered_at
+        # The rider is active from acceptance through completion. The
+        # dispatch loop is chronological, so this enforces one active
+        # delivery without blocking earlier historical deliveries.
+        rider_available_at[rider_id] = delivered_at
 
     # ---------------------------------------------------------
     # Derive final order state
@@ -1611,55 +1580,7 @@ def save_assignments(
 
 
 if __name__ == "__main__":
-
-    orders = load_csv(
-        "orders.csv"
-    )
-
-    fulfilment_units = load_csv(
-        "fulfilment_units.csv"
-    )
-
-    deliveries = load_csv(
-        "deliveries.csv"
-    )
-
-    riders = load_csv(
-        "riders.csv"
-    )
-
-    stores = load_csv(
-        "stores.csv"
-    )
-
-    (
-        events,
-        updated_orders,
-        updated_fulfilments,
-        updated_deliveries,
-        updated_assignments,
-    ) = generate_operational_events(
-        orders=orders,
-        fulfilment_units=fulfilment_units,
-        deliveries=deliveries,
-        riders=riders,
-        stores=stores,
-    )
-
-    save_events(events)
-
-    save_orders(
-        updated_orders
-    )
-
-    save_fulfilment_units(
-        updated_fulfilments
-    )
-
-    save_deliveries(
-        updated_deliveries
-    )
-
-    save_assignments(
-        updated_assignments
+    raise SystemExit(
+        "Run simulator.run_simulation for the complete "
+        "calendar-aware lifecycle."
     )

@@ -80,9 +80,10 @@ def choose_store(
         key=squared_distance,
     )
 
-    # Usually select one of the closest stores.
-    # Occasionally allow a less-near eligible store so
-    # the simulation isn't perfectly deterministic.
+    # Usually select one of the closest stores. The small random
+    # tail is still constrained to nearby stores; choosing any of
+    # 120 stores created 15–30 km routes that are not credible for
+    # a quick-commerce SLA.
     top_n = min(
         3,
         len(ranked_stores),
@@ -93,8 +94,15 @@ def choose_store(
             ranked_stores[:top_n]
         )
 
+    nearby_tail = ranked_stores[
+        top_n:min(10, len(ranked_stores))
+    ]
+
+    if nearby_tail:
+        return random.choice(nearby_tail)
+
     return random.choice(
-        ranked_stores
+        ranked_stores[:top_n]
     )
 
 def choose_second_store(
