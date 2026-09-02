@@ -331,14 +331,6 @@ def validate_order_item_ownership(
         for row in state.fulfilment_units
     }
 
-    accepted_riders_by_delivery = defaultdict(set)
-
-    for assignment in state.rider_assignments:
-        if assignment["response"] == "ACCEPTED":
-            accepted_riders_by_delivery[
-                assignment["delivery_id"]
-            ].add(assignment["rider_id"])
-
     for item in state.order_items:
 
         fulfilment = fulfilments_by_id.get(
@@ -1179,6 +1171,14 @@ def validate_delivery_fulfilment_consistency(
         row["fulfilment_unit_id"]: row
         for row in state.fulfilment_units
     }
+
+    accepted_riders_by_delivery = defaultdict(set)
+
+    for assignment in state.rider_assignments:
+        if assignment["response"] == "ACCEPTED":
+            accepted_riders_by_delivery[
+                assignment["delivery_id"]
+            ].add(assignment["rider_id"])
 
     for delivery in state.deliveries:
 
