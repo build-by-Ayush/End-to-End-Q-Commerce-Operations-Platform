@@ -683,6 +683,8 @@ def generate_operational_events(
                 f"{fulfilment_id}"
             )
 
+        delivery_id = delivery["delivery_id"]
+
         assigned_to_store_at = parse_timestamp(
             fulfilment[
                 "assigned_to_store_at"
@@ -965,6 +967,7 @@ def generate_operational_events(
                 occurred_at=failure_time,
                 order_id=order_id,
                 fulfilment_unit_id=fulfilment_id,
+                delivery_id=delivery_id,
                 store_id=store_id,
                 reason=failure_reason,
             )
@@ -998,11 +1001,6 @@ def generate_operational_events(
         # -----------------------------------------------------
         # Delivery / rider assignment
         # -----------------------------------------------------
-
-        delivery_id = delivery[
-            "delivery_id"
-        ]
-
         # The delivery request is created before rider acceptance.
         # Its dispatch timestamp is calculated here and processed
         # chronologically after all fulfilment timing is known.
