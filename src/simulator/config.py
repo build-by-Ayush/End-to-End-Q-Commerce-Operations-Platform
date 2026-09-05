@@ -8,7 +8,7 @@ class SimulationConfig:
     # Root / reference data
     # ---------------------------------------------------------
 
-    customers: int = 1_000_000
+    customers: int = 10000
     stores: int = 120
     riders: int = 2_000
 
@@ -16,7 +16,7 @@ class SimulationConfig:
     # Transaction volume
     # ---------------------------------------------------------
 
-    orders: int = 500_000
+    orders: int = 5000
 
     # ---------------------------------------------------------
     # Lightweight product reference pool
