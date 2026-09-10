@@ -8,8 +8,8 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "dbt-core",
-    "dbt-bigquery",
+    "dbt-core==1.11.14",
+    "dbt-bigquery==1.11.3",
     "faker>=40.36.0",
 ]
 

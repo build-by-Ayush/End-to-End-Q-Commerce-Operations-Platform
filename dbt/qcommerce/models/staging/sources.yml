@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: raw
+    database: q-commerce-operations-platform
+    schema: raw
+
+    tables:
+      - name: customers
+      - name: stores
+      - name: riders
+      - name: orders
+      - name: fulfilment_units
+      - name: order_items
+      - name: deliveries
+      - name: rider_assignments
+      - name: operational_events
+      - name: store_staffing
