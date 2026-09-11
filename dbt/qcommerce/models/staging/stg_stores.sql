@@ -8,7 +8,7 @@ SELECT
     SAFE_CAST(TRIM(baseline_capacity) AS INT64) AS baseline_capacity,
 
     UPPER(TRIM(status)) AS status,
-    SAFE.PARSE_DATE('%d-%m-%Y',NULLIF(TRIM(opened_at), '')) AS opened_at,
+    SAFE.PARSE_DATE('%d-%m-%Y',SUBSTR(TRIM(opened_at), 1, 10)) AS opened_at,
 
     CASE
         WHEN closed_at IS NULL THEN NULL
