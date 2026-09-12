@@ -51,7 +51,7 @@ SELECT
         )
     END AS delivered_at,
 
-    SAFE_CAST(delivery_distance AS FLOAT64) AS delivery_distance,
+    SAFE_CAST(TRIM(delivery_distance) AS FLOAT64) AS delivery_distance,
     UPPER(TRIM(REPLACE(traffic_condition,'#',''))) AS traffic_condition,
     UPPER(TRIM(REPLACE(weather_condition,'#',''))) AS weather_condition,
 
@@ -87,7 +87,7 @@ SELECT
         WHEN TRIM(failure_reason) = '' THEN NULL
         WHEN UPPER(TRIM(failure_reason)) = 'NULL' THEN NULL
         ELSE UPPER(TRIM(REPLACE(failure_reason, '#', '')))
-    END AS failure_reason,
+    END AS failure_reason
 
 FROM {{ source('raw', 'deliveries') }}
 
