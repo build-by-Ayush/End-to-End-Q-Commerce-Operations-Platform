@@ -7,9 +7,23 @@ SELECT
         WHEN offered_at IS NULL THEN NULL
         WHEN TRIM(offered_at) = '' THEN NULL
         WHEN UPPER(TRIM(offered_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(offered_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(offered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(offered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(offered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(offered_at)
+            )
         )
     END AS offered_at,
 
@@ -17,9 +31,23 @@ SELECT
         WHEN responded_at IS NULL THEN NULL
         WHEN TRIM(responded_at) = '' THEN NULL
         WHEN UPPER(TRIM(responded_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(responded_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(responded_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(responded_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(responded_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(responded_at)
+            )
         )
     END AS responded_at,
 
@@ -27,9 +55,23 @@ SELECT
         WHEN expired_at IS NULL THEN NULL
         WHEN TRIM(expired_at) = '' THEN NULL
         WHEN UPPER(TRIM(expired_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(expired_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(expired_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(expired_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(expired_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(expired_at)
+            )
         )
     END AS expired_at,
 

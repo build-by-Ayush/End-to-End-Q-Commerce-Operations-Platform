@@ -15,9 +15,23 @@ SELECT
         WHEN rider_arrived_at_store IS NULL THEN NULL
         WHEN TRIM(rider_arrived_at_store) = '' THEN NULL
         WHEN UPPER(TRIM(rider_arrived_at_store)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(rider_arrived_at_store)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(rider_arrived_at_store)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(rider_arrived_at_store)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(rider_arrived_at_store)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(rider_arrived_at_store)
+            )
         )
     END AS rider_arrived_at_store,
 
@@ -25,9 +39,23 @@ SELECT
         WHEN picked_up_at IS NULL THEN NULL
         WHEN TRIM(picked_up_at) = '' THEN NULL
         WHEN UPPER(TRIM(picked_up_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(picked_up_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(picked_up_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(picked_up_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(picked_up_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(picked_up_at)
+            )
         )
     END AS picked_up_at,
 
@@ -35,9 +63,23 @@ SELECT
         WHEN delivery_started_at IS NULL THEN NULL
         WHEN TRIM(delivery_started_at) = '' THEN NULL
         WHEN UPPER(TRIM(delivery_started_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(delivery_started_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(delivery_started_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(delivery_started_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(delivery_started_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(delivery_started_at)
+            )
         )
     END AS delivery_started_at,
 
@@ -45,9 +87,23 @@ SELECT
         WHEN delivered_at IS NULL THEN NULL
         WHEN TRIM(delivered_at) = '' THEN NULL
         WHEN UPPER(TRIM(delivered_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(delivered_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(delivered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(delivered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(delivered_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(delivered_at)
+            )
         )
     END AS delivered_at,
 
@@ -59,9 +115,23 @@ SELECT
         WHEN cancelled_at IS NULL THEN NULL
         WHEN TRIM(cancelled_at) = '' THEN NULL
         WHEN UPPER(TRIM(cancelled_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(cancelled_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(cancelled_at)
+            )
         )
     END AS cancelled_at,
 
@@ -76,9 +146,23 @@ SELECT
         WHEN failed_at IS NULL THEN NULL
         WHEN TRIM(failed_at) = '' THEN NULL
         WHEN UPPER(TRIM(failed_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(failed_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(failed_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(failed_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(failed_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(failed_at)
+            )
         )
     END AS failed_at,
 

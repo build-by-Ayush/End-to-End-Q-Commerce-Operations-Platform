@@ -2,7 +2,24 @@ SELECT
     TRIM(staffing_snapshot_id) AS staffing_snapshot_id,
     TRIM(store_id) AS store_id,
 
-    SAFE.PARSE_TIMESTAMP('%d-%m-%Y %H:%M',TRIM(recorded_at)) AS recorded_at,
+    COALESCE(
+        SAFE.PARSE_TIMESTAMP(
+            '%Y-%m-%d %H:%M:%S',
+            TRIM(recorded_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d/%m/%Y %H:%M',
+            TRIM(recorded_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%Y/%m/%d %H:%M:%S',
+            TRIM(recorded_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d-%m-%Y %H:%M:%S',
+            TRIM(recorded_at)
+        )
+    ) AS recorded_at,
 
     SAFE_CAST(pickers_scheduled AS INT64) AS pickers_scheduled,
     SAFE_CAST(pickers_available AS INT64) AS pickers_available,

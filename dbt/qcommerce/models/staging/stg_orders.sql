@@ -2,8 +2,43 @@ SELECT
     TRIM(order_id) AS order_id,
     TRIM(customer_id) AS customer_id,
 
-    SAFE.PARSE_TIMESTAMP('%d-%m-%Y %H:%M',NULLIF(TRIM(created_at), '')) AS created_at,
-    SAFE.PARSE_TIMESTAMP('%d-%m-%Y %H:%M',NULLIF(TRIM(payment_success_at), '')) AS payment_success_at,
+    COALESCE(
+        SAFE.PARSE_TIMESTAMP(
+            '%Y-%m-%d %H:%M:%S',
+            TRIM(created_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d/%m/%Y %H:%M',
+            TRIM(created_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%Y/%m/%d %H:%M:%S',
+            TRIM(created_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d-%m-%Y %H:%M:%S',
+            TRIM(created_at)
+        )
+    ) AS created_at,
+
+    COALESCE(
+        SAFE.PARSE_TIMESTAMP(
+            '%Y-%m-%d %H:%M:%S',
+            TRIM(payment_success_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d/%m/%Y %H:%M',
+            TRIM(payment_success_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%Y/%m/%d %H:%M:%S',
+            TRIM(payment_success_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d-%m-%Y %H:%M:%S',
+            TRIM(payment_success_at)
+        )
+    ) AS payment_success_at,
 
     SAFE_CAST(TRIM(delivery_latitude) AS FLOAT64) AS delivery_latitude,
     SAFE_CAST(TRIM(delivery_longitude) AS FLOAT64) AS delivery_longitude,
@@ -15,9 +50,23 @@ SELECT
         WHEN cancelled_at IS NULL THEN NULL
         WHEN TRIM(cancelled_at) = '' THEN NULL
         WHEN UPPER(TRIM(cancelled_at)) = 'NULL' THEN NULL
-        ELSE SAFE.PARSE_TIMESTAMP(
-            '%d-%m-%Y %H:%M',
-            TRIM(cancelled_at)
+        ELSE COALESCE(
+            SAFE.PARSE_TIMESTAMP(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d/%m/%Y %H:%M',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%Y/%m/%d %H:%M:%S',
+                TRIM(cancelled_at)
+            ),
+            SAFE.PARSE_TIMESTAMP(
+                '%d-%m-%Y %H:%M:%S',
+                TRIM(cancelled_at)
+            )
         )
     END AS cancelled_at,
 

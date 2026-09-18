@@ -8,7 +8,24 @@ SELECT
         ELSE UPPER(TRIM(REPLACE(event_type, '#', '')))
     END AS event_type,
 
-    SAFE.PARSE_TIMESTAMP('%d-%m-%Y %H:%M',TRIM(occurred_at)) AS occurred_at,
+    COALESCE(
+        SAFE.PARSE_TIMESTAMP(
+            '%Y-%m-%d %H:%M:%S',
+            TRIM(occurred_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d/%m/%Y %H:%M',
+            TRIM(occurred_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%Y/%m/%d %H:%M:%S',
+            TRIM(occurred_at)
+        ),
+        SAFE.PARSE_TIMESTAMP(
+            '%d-%m-%Y %H:%M:%S',
+            TRIM(occurred_at)
+        )
+    ) AS occurred_at,
 
     TRIM(order_id) AS order_id,
     TRIM(fulfilment_unit_id) AS fulfilment_unit_id,
