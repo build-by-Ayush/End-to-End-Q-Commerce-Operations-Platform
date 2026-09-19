@@ -1,3 +1,13 @@
+{{ config(
+    materialized='table',
+    partition_by={
+        'field': 'recorded_at',
+        'data_type': 'timestamp',
+        'granularity': 'day'
+    },
+    cluster_by=['store_id']
+) }}
+
 SELECT
     staffing_snapshot_id,
     store_id,
