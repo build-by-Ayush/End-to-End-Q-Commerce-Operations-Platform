@@ -39,17 +39,25 @@ SELECT
     so.cancellation_reason,
     so.failure_reason,
 
-    TIMESTAMP_DIFF(
-        payment_success_at,
-        created_at,
-        SECOND
-    ) AS payment_processing_seconds,
+    CASE
+        WHEN payment_success_at >= created_at
+            THEN TIMESTAMP_DIFF(
+                payment_success_at,
+                created_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS payment_processing_seconds,
 
-    TIMESTAMP_DIFF(
-        cancelled_at,
-        payment_success_at,
-        SECOND
-    ) AS time_to_cancellation_seconds
+    CASE
+        WHEN cancelled_at >= payment_success_at
+            THEN TIMESTAMP_DIFF(
+                cancelled_at,
+                payment_success_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS time_to_cancellation_seconds
 
 FROM {{ ref('stg_orders') }} AS so
 LEFT JOIN order_item_summary AS ois

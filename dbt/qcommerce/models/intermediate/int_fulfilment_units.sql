@@ -26,28 +26,44 @@ SELECT
     failure_reason,
     completed_at,
 
-    TIMESTAMP_DIFF(
-        picking_started_at,
-        assigned_to_store_at,
-        SECOND
-    ) AS assignment_to_picking_start_seconds,
+    CASE
+        WHEN picking_started_at >= assigned_to_store_at
+            THEN TIMESTAMP_DIFF(
+                picking_started_at,
+                assigned_to_store_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS assignment_to_picking_start_seconds,
 
-    TIMESTAMP_DIFF(
-        picking_completed_at,
-        picking_started_at,
-        SECOND
-    ) AS picking_duration_seconds,
+    CASE
+        WHEN picking_completed_at >= picking_started_at
+            THEN TIMESTAMP_DIFF(
+                picking_completed_at,
+                picking_started_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS picking_duration_seconds,
 
-    TIMESTAMP_DIFF(
-        packing_completed_at,
-        packing_started_at,
-        SECOND
-    ) AS packing_duration_seconds,
+    CASE
+        WHEN packing_completed_at >= packing_started_at
+            THEN TIMESTAMP_DIFF(
+                packing_completed_at,
+                packing_started_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS packing_duration_seconds,
 
-    TIMESTAMP_DIFF(
-        packing_completed_at,
-        assigned_to_store_at,
-        SECOND
-    ) AS store_processing_duration_seconds
+    CASE
+        WHEN packing_completed_at >= assigned_to_store_at
+            THEN TIMESTAMP_DIFF(
+                packing_completed_at,
+                assigned_to_store_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS store_processing_duration_seconds
 
 FROM {{ ref('stg_fulfilment_units') }}

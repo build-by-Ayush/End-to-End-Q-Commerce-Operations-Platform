@@ -20,16 +20,24 @@ SELECT
     response,
     rejection_reason,
 
-    TIMESTAMP_DIFF(
-        responded_at,
-        offered_at,
-        SECOND
-    ) AS response_time_seconds,
+    CASE
+        WHEN responded_at >= offered_at
+            THEN TIMESTAMP_DIFF(
+                responded_at,
+                offered_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS response_time_seconds,
 
-    TIMESTAMP_DIFF(
-        expired_at,
-        offered_at,
-        SECOND
-    ) AS time_to_expiration_seconds
+    CASE
+        WHEN expired_at >= offered_at
+            THEN TIMESTAMP_DIFF(
+                expired_at,
+                offered_at,
+                SECOND
+            )
+        ELSE NULL
+    END AS time_to_expiration_seconds
 
 FROM {{ ref('stg_rider_assignments') }}
