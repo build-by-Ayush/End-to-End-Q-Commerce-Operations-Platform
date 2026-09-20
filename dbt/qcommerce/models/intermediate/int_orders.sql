@@ -8,21 +8,36 @@
     cluster_by=['delivery_zone', 'status']
 ) }}
 
+WITH order_item_summary AS (
+    SELECT 
+        order_id,
+        COUNT(DISTINCT fulfilment_unit_id) AS fulfilment_unit_count,
+        COUNT(DISTINCT product_id) AS unique_product_count,
+        COUNT(*) AS order_item_count,
+        SUM(quantity) AS total_quantity
+    FROM {{ ref('stg_order_items') }}
+    GROUP BY order_id
+)
 SELECT
-    order_id,
-    customer_id,
+    so.order_id,
+    so.customer_id,
 
-    created_at,
-    payment_success_at,
+    so.created_at,
+    so.payment_success_at,
 
-    delivery_latitude,
-    delivery_longitude,
-    delivery_zone,
+    so.delivery_latitude,
+    so.delivery_longitude,
+    so.delivery_zone,
 
-    status,
-    cancelled_at,
-    cancellation_reason,
-    failure_reason,
+    so.status,
+    ois.fulfilment_unit_count,
+    ois.unique_product_count,
+    ois.total_quantity,
+    ois.order_item_count,
+
+    so.cancelled_at,
+    so.cancellation_reason,
+    so.failure_reason,
 
     TIMESTAMP_DIFF(
         payment_success_at,
@@ -36,4 +51,6 @@ SELECT
         SECOND
     ) AS time_to_cancellation_seconds
 
-FROM {{ ref('stg_orders') }}
+FROM {{ ref('stg_orders') }} AS so
+LEFT JOIN order_item_summary AS ois
+    ON so.order_id = ois.order_id
