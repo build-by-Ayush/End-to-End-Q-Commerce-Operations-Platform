@@ -10,10 +10,10 @@ SELECT
     UPPER(TRIM(status)) AS status,
 
     COALESCE(
-        SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(TRIM(opened_at), 1, 10), 'Asia/Kolkata'),
-        SAFE.PARSE_DATE('%d/%m/%Y', SUBSTR(TRIM(opened_at), 1, 10), 'Asia/Kolkata'),
-        SAFE.PARSE_DATE('%Y/%m/%d', SUBSTR(TRIM(opened_at), 1, 10), 'Asia/Kolkata'),
-        SAFE.PARSE_DATE('%d-%m-%Y', SUBSTR(TRIM(opened_at), 1, 10), 'Asia/Kolkata')
+        SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(TRIM(opened_at), 1, 10)),
+        SAFE.PARSE_DATE('%d/%m/%Y', SUBSTR(TRIM(opened_at), 1, 10)),
+        SAFE.PARSE_DATE('%Y/%m/%d', SUBSTR(TRIM(opened_at), 1, 10)),
+        SAFE.PARSE_DATE('%d-%m-%Y', SUBSTR(TRIM(opened_at), 1, 10))
     ) AS opened_at,
 
     CASE
@@ -21,10 +21,10 @@ SELECT
         WHEN TRIM(closed_at) = '' THEN NULL
         WHEN UPPER(TRIM(closed_at)) = 'NULL' THEN NULL
         ELSE COALESCE(
-            SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(TRIM(closed_at), 1, 10), 'Asia/Kolkata'),
-            SAFE.PARSE_DATE('%d/%m/%Y', SUBSTR(TRIM(closed_at), 1, 10), 'Asia/Kolkata'),
-            SAFE.PARSE_DATE('%Y/%m/%d', SUBSTR(TRIM(closed_at), 1, 10), 'Asia/Kolkata'),
-            SAFE.PARSE_DATE('%d-%m-%Y', SUBSTR(TRIM(closed_at), 1, 10), 'Asia/Kolkata')
+            SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(TRIM(closed_at), 1, 10)),
+            SAFE.PARSE_DATE('%d/%m/%Y', SUBSTR(TRIM(closed_at), 1, 10)),
+            SAFE.PARSE_DATE('%Y/%m/%d', SUBSTR(TRIM(closed_at), 1, 10)),
+            SAFE.PARSE_DATE('%d-%m-%Y', SUBSTR(TRIM(closed_at), 1, 10))
         )
     END AS closed_at
 
