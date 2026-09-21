@@ -5,19 +5,23 @@ SELECT
     COALESCE(
         SAFE.PARSE_TIMESTAMP(
             '%Y-%m-%d %H:%M:%S',
-            TRIM(recorded_at)
+            TRIM(recorded_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d/%m/%Y %H:%M',
-            TRIM(recorded_at)
+            TRIM(recorded_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%Y/%m/%d %H:%M:%S',
-            TRIM(recorded_at)
+            TRIM(recorded_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d-%m-%Y %H:%M:%S',
-            TRIM(recorded_at)
+            TRIM(recorded_at),
+            'Asia/Kolkata'
         )
     ) AS recorded_at,
 

@@ -11,19 +11,23 @@ SELECT
     COALESCE(
         SAFE.PARSE_TIMESTAMP(
             '%Y-%m-%d %H:%M:%S',
-            TRIM(occurred_at)
+            TRIM(occurred_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d/%m/%Y %H:%M',
-            TRIM(occurred_at)
+            TRIM(occurred_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%Y/%m/%d %H:%M:%S',
-            TRIM(occurred_at)
+            TRIM(occurred_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d-%m-%Y %H:%M:%S',
-            TRIM(occurred_at)
+            TRIM(occurred_at),
+            'Asia/Kolkata'
         )
     ) AS occurred_at,
 

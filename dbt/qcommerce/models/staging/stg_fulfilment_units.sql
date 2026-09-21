@@ -12,19 +12,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(assigned_to_store_at)
+                TRIM(assigned_to_store_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(assigned_to_store_at)
+                TRIM(assigned_to_store_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(assigned_to_store_at)
+                TRIM(assigned_to_store_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(assigned_to_store_at)
+                TRIM(assigned_to_store_at),
+                'Asia/Kolkata'
             )
         )
     END AS assigned_to_store_at,
@@ -36,19 +40,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(picking_started_at)
+                TRIM(picking_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(picking_started_at)
+                TRIM(picking_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(picking_started_at)
+                TRIM(picking_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(picking_started_at)
+                TRIM(picking_started_at),
+                'Asia/Kolkata'
             )
         )
     END AS picking_started_at,
@@ -60,19 +68,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(picking_completed_at)
+                TRIM(picking_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(picking_completed_at)
+                TRIM(picking_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(picking_completed_at)
+                TRIM(picking_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(picking_completed_at)
+                TRIM(picking_completed_at),
+                'Asia/Kolkata'
             )
         )
     END AS picking_completed_at,
@@ -84,19 +96,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(packing_started_at)
+                TRIM(packing_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(packing_started_at)
+                TRIM(packing_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(packing_started_at)
+                TRIM(packing_started_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(packing_started_at)
+                TRIM(packing_started_at),
+                'Asia/Kolkata'
             )
         )
     END AS packing_started_at,
@@ -108,19 +124,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(packing_completed_at)
+                TRIM(packing_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(packing_completed_at)
+                TRIM(packing_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(packing_completed_at)
+                TRIM(packing_completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(packing_completed_at)
+                TRIM(packing_completed_at),
+                'Asia/Kolkata'
             )
         )
     END AS packing_completed_at,
@@ -132,19 +152,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             )
         )
     END AS cancelled_at,
@@ -163,19 +187,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(failed_at)
+                TRIM(failed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(failed_at)
+                TRIM(failed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(failed_at)
+                TRIM(failed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(failed_at)
+                TRIM(failed_at),
+                'Asia/Kolkata'
             )
         )
     END AS failed_at,
@@ -194,19 +222,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(completed_at)
+                TRIM(completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(completed_at)
+                TRIM(completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(completed_at)
+                TRIM(completed_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(completed_at)
+                TRIM(completed_at),
+                'Asia/Kolkata'
             )
         )
     END AS completed_at

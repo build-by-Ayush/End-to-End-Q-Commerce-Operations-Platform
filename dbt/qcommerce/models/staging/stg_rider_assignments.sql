@@ -10,19 +10,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(offered_at)
+                TRIM(offered_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(offered_at)
+                TRIM(offered_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(offered_at)
+                TRIM(offered_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(offered_at)
+                TRIM(offered_at),
+                'Asia/Kolkata'
             )
         )
     END AS offered_at,
@@ -34,19 +38,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(responded_at)
+                TRIM(responded_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(responded_at)
+                TRIM(responded_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(responded_at)
+                TRIM(responded_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(responded_at)
+                TRIM(responded_at),
+                'Asia/Kolkata'
             )
         )
     END AS responded_at,
@@ -58,19 +66,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(expired_at)
+                TRIM(expired_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(expired_at)
+                TRIM(expired_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(expired_at)
+                TRIM(expired_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(expired_at)
+                TRIM(expired_at),
+                'Asia/Kolkata'
             )
         )
     END AS expired_at,

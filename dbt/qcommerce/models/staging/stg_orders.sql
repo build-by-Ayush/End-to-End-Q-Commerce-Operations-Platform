@@ -5,38 +5,46 @@ SELECT
     COALESCE(
         SAFE.PARSE_TIMESTAMP(
             '%Y-%m-%d %H:%M:%S',
-            TRIM(created_at)
+            TRIM(created_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d/%m/%Y %H:%M',
-            TRIM(created_at)
+            TRIM(created_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%Y/%m/%d %H:%M:%S',
-            TRIM(created_at)
+            TRIM(created_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d-%m-%Y %H:%M:%S',
-            TRIM(created_at)
+            TRIM(created_at),
+            'Asia/Kolkata'
         )
     ) AS created_at,
 
     COALESCE(
         SAFE.PARSE_TIMESTAMP(
             '%Y-%m-%d %H:%M:%S',
-            TRIM(payment_success_at)
+            TRIM(payment_success_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d/%m/%Y %H:%M',
-            TRIM(payment_success_at)
+            TRIM(payment_success_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%Y/%m/%d %H:%M:%S',
-            TRIM(payment_success_at)
+            TRIM(payment_success_at),
+            'Asia/Kolkata'
         ),
         SAFE.PARSE_TIMESTAMP(
             '%d-%m-%Y %H:%M:%S',
-            TRIM(payment_success_at)
+            TRIM(payment_success_at),
+            'Asia/Kolkata'
         )
     ) AS payment_success_at,
 
@@ -53,19 +61,23 @@ SELECT
         ELSE COALESCE(
             SAFE.PARSE_TIMESTAMP(
                 '%Y-%m-%d %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d/%m/%Y %H:%M',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%Y/%m/%d %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             ),
             SAFE.PARSE_TIMESTAMP(
                 '%d-%m-%Y %H:%M:%S',
-                TRIM(cancelled_at)
+                TRIM(cancelled_at),
+                'Asia/Kolkata'
             )
         )
     END AS cancelled_at,
