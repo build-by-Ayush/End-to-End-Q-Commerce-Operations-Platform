@@ -18,7 +18,6 @@ WITH order_item_summary AS (
         SUM(quantity) AS total_quantity
 
     FROM {{ ref('stg_order_items') }}
-
     GROUP BY order_id
 )
 

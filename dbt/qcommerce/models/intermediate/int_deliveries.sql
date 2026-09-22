@@ -1,5 +1,5 @@
 {{ config(
-    materialized='table',
+    materialized='view',
     partition_by={
         'field': 'rider_arrived_at_store',
         'data_type': 'timestamp',
