@@ -37,6 +37,8 @@ SELECT
     ifu.failure_reason,
     ifu.completed_at,
 
+    so.payment_success_at,
+
     ifu.assignment_to_picking_start_seconds,
     ifu.picking_duration_seconds,
     ifu.packing_duration_seconds,
@@ -47,7 +49,6 @@ SELECT
     idl.transit_duration_seconds,
     idl.store_arrival_to_delivery_seconds,
 
-    -- Fulfilment outcome flags
     CASE
         WHEN ifu.completed_at IS NOT NULL THEN 1
         ELSE 0
@@ -63,7 +64,6 @@ SELECT
         ELSE 0
     END AS failed_fulfilment_unit_flag,
 
-    -- Delivery outcome flags
     CASE
         WHEN idl.delivered_at IS NOT NULL THEN 1
         ELSE 0
@@ -77,9 +77,60 @@ SELECT
     CASE
         WHEN idl.failed_at IS NOT NULL THEN 1
         ELSE 0
-    END AS delivery_failed_flag
+    END AS delivery_failed_flag,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND idl.delivered_at IS NOT NULL
+            AND idl.delivered_at >= so.payment_success_at
+        THEN 1
+        ELSE 0
+    END AS sla_eligible_flag,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND idl.delivered_at IS NOT NULL
+            AND idl.delivered_at >= so.payment_success_at
+        THEN TIMESTAMP_DIFF(
+            idl.delivered_at,
+            so.payment_success_at,
+            SECOND
+        )
+        ELSE NULL
+    END AS unit_sla_duration_seconds,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND idl.delivered_at IS NOT NULL
+            AND idl.delivered_at >= so.payment_success_at
+            AND TIMESTAMP_DIFF(
+                idl.delivered_at,
+                so.payment_success_at,
+                SECOND
+            ) > 1500
+        THEN 1
+        ELSE 0
+    END AS unit_sla_breach_flag,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND idl.delivered_at IS NOT NULL
+            AND idl.delivered_at >= so.payment_success_at
+        THEN GREATEST(
+            TIMESTAMP_DIFF(
+                idl.delivered_at,
+                so.payment_success_at,
+                SECOND
+            ) - 1200,
+            0
+        )
+        ELSE NULL
+    END AS unit_lateness_seconds
 
 FROM {{ ref('int_fulfilment_units') }} AS ifu
 
 LEFT JOIN {{ ref('int_deliveries') }} AS idl
     ON ifu.fulfilment_unit_id = idl.fulfilment_unit_id
+
+LEFT JOIN {{ ref('stg_orders') }} AS so
+    ON ifu.order_id = so.order_id
