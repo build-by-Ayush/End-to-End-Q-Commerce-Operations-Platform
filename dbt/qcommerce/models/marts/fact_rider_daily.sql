@@ -43,6 +43,7 @@ daily_assignment AS (
 
         SUM(rejected_flag) AS rejected_assignments,
         SUM(expired_flag) AS expired_assignments,
+
         AVG(response_time_seconds) AS avg_response_time_seconds
 
     FROM {{ ref('fact_rider_assignments') }}
@@ -59,11 +60,18 @@ daily_deliveries AS (
         COUNT(delivery_id) AS delivery_count,
         SUM(delivered_flag) AS delivered_count,
         SUM(delivery_cancelled_flag) AS cancelled_delivery_count,
-
         SUM(delivery_failed_flag) AS failed_delivery_count,
-        AVG(transit_duration_seconds) AS avg_transit_duration_seconds
+
+        AVG(transit_duration_seconds) AS avg_transit_duration_seconds,
+
+        SUM(sla_eligible_flag) AS sla_eligible_units,
+        SUM(unit_sla_breach_flag) AS sla_breach_units,
+
+        AVG(unit_sla_duration_seconds) AS avg_sla_duration_seconds,
+        AVG(unit_lateness_seconds) AS avg_unit_lateness_seconds
 
     FROM {{ ref('fact_fulfilment_units') }}
+
     WHERE delivery_id IS NOT NULL
 
     GROUP BY 1, 2
@@ -107,7 +115,18 @@ SELECT
     SAFE_DIVIDE(
         COALESCE(del.delivered_count, 0),
         COALESCE(del.delivery_count, 0)
-    ) AS delivery_success_rate
+    ) AS delivery_success_rate,
+
+    COALESCE(del.sla_eligible_units, 0) AS sla_eligible_units,
+    COALESCE(del.sla_breach_units, 0) AS sla_breach_units,
+
+    del.avg_sla_duration_seconds,
+    del.avg_unit_lateness_seconds,
+
+    SAFE_DIVIDE(
+        COALESCE(del.sla_breach_units, 0),
+        COALESCE(del.sla_eligible_units, 0)
+    ) AS sla_breach_rate
 
 FROM rider_date_spine AS spine
 
