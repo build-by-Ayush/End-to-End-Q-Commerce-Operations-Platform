@@ -43,12 +43,17 @@ daily_units AS (
         SUM(failed_fulfilment_unit_flag) AS failed_units,
 
         AVG(store_processing_duration_seconds) AS avg_store_processing_seconds,
-        AVG(store_arrival_to_delivery_seconds) AS avg_store_arrival_to_delivery_seconds,
-        COUNT(delivery_id) AS delivery_attempts,
 
+        COUNT(delivery_id) AS deliveries,
         SUM(delivered_flag) AS delivered_units,
         SUM(delivery_cancelled_flag) AS delivery_cancelled_units,
-        SUM(delivery_failed_flag) AS delivery_failed_units
+        SUM(delivery_failed_flag) AS delivery_failed_units,
+
+        AVG(store_arrival_to_delivery_seconds) AS avg_store_arrival_to_delivery_seconds,
+
+        SUM(sla_eligible_flag) AS sla_eligible_units,
+        SUM(unit_sla_breach_flag) AS sla_breach_units,
+        AVG(unit_sla_duration_seconds) AS avg_sla_duration_seconds
 
     FROM {{ ref('fact_fulfilment_units') }}
     GROUP BY 1, 2
@@ -79,29 +84,39 @@ SELECT
     spine.store_id,
     spine.store_name,
 
-    COALESCE(units.orders_served,0) AS orders_served,
-    COALESCE(units.fulfilment_units_handled,0) AS fulfilment_units_handled,
+    COALESCE(units.orders_served, 0) AS orders_served,
+    COALESCE(units.fulfilment_units_handled, 0) AS fulfilment_units_handled,
 
-    COALESCE(units.completed_units,0) AS completed_units,
-    COALESCE(units.cancelled_units,0) AS cancelled_units,
-    COALESCE(units.failed_units,0) AS failed_units,
+    COALESCE(units.completed_units, 0) AS completed_units,
+    COALESCE(units.cancelled_units, 0) AS cancelled_units,
+    COALESCE(units.failed_units, 0) AS failed_units,
+
     units.avg_store_processing_seconds,
 
+    COALESCE(units.deliveries, 0) AS deliveries,
+    COALESCE(units.delivered_units, 0) AS delivered_units,
+    COALESCE(units.delivery_cancelled_units, 0) AS delivery_cancelled_units,
+    COALESCE(units.delivery_failed_units, 0) AS delivery_failed_units,
 
-    COALESCE(units.delivery_attempts,0) AS delivery_attempts,
-    COALESCE(units.delivered_units,0) AS delivered_units,
-    COALESCE(units.delivery_cancelled_units,0) AS delivery_cancelled_units,
-    COALESCE(units.delivery_failed_units,0) AS delivery_failed_units,
     units.avg_store_arrival_to_delivery_seconds,
 
     SAFE_DIVIDE(
         COALESCE(units.delivered_units, 0),
-        COALESCE(units.delivery_attempts, 0)
+        COALESCE(units.deliveries, 0)
     ) AS delivery_success_rate,
 
-    COALESCE(staff.total_staffing_snapshots,0) AS total_staffing_snapshots,
-    COALESCE(staff.understaffed_snapshots,0) AS understaffed_snapshots,
-    COALESCE(staff.understaffed_snapshot_rate,0) AS understaffed_snapshot_rate,
+    COALESCE(units.sla_eligible_units, 0) AS sla_eligible_units,
+    COALESCE(units.sla_breach_units, 0) AS sla_breach_units,
+    units.avg_sla_duration_seconds,
+
+    SAFE_DIVIDE(
+        COALESCE(units.sla_breach_units, 0),
+        COALESCE(units.sla_eligible_units, 0)
+    ) AS sla_breach_rate,
+
+    COALESCE(staff.total_staffing_snapshots, 0) AS total_staffing_snapshots,
+    COALESCE(staff.understaffed_snapshots, 0) AS understaffed_snapshots,
+    staff.understaffed_snapshot_rate,
     staff.avg_picker_availability_rate,
     staff.avg_packer_availability_rate
 
