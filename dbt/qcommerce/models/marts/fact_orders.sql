@@ -19,6 +19,20 @@ WITH order_item_summary AS (
 
     FROM {{ ref('stg_order_items') }}
     GROUP BY order_id
+),
+
+order_sla AS (
+
+    SELECT
+        order_id,
+        MAX(payment_success_at) AS payment_success_at,
+        COUNT(*) AS total_fulfilment_units,
+        SUM(delivered_flag) AS delivered_fulfilment_units,
+        MAX(delivered_at) AS final_delivered_at
+
+    FROM {{ ref('fact_fulfilment_units') }}
+
+    GROUP BY order_id
 )
 
 SELECT
@@ -88,9 +102,48 @@ SELECT
     CASE
         WHEN ois.fulfilment_unit_count > 1 THEN 1
         ELSE 0
-    END AS split_order_flag
+    END AS split_order_flag,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND os.total_fulfilment_units > 0
+            AND os.delivered_fulfilment_units = os.total_fulfilment_units
+            AND os.final_delivered_at >= so.payment_success_at
+        THEN 1
+        ELSE 0
+    END AS order_sla_eligible_flag,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND os.total_fulfilment_units > 0
+            AND os.delivered_fulfilment_units = os.total_fulfilment_units
+            AND os.final_delivered_at >= so.payment_success_at
+        THEN TIMESTAMP_DIFF(
+            os.final_delivered_at,
+            so.payment_success_at,
+            SECOND
+        )
+        ELSE NULL
+    END AS order_sla_duration_seconds,
+
+    CASE
+        WHEN so.payment_success_at IS NOT NULL
+            AND os.total_fulfilment_units > 0
+            AND os.delivered_fulfilment_units = os.total_fulfilment_units
+            AND os.final_delivered_at >= so.payment_success_at
+            AND TIMESTAMP_DIFF(
+                os.final_delivered_at,
+                so.payment_success_at,
+                SECOND
+            ) > 1500
+        THEN 1
+        ELSE 0
+    END AS order_sla_breach_flag
 
 FROM {{ ref('stg_orders') }} AS so
 
 LEFT JOIN order_item_summary AS ois
     ON so.order_id = ois.order_id
+
+LEFT JOIN order_sla AS os
+    ON so.order_id = os.order_id
