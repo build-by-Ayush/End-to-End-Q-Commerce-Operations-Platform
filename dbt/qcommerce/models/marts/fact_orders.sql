@@ -85,7 +85,7 @@ SELECT
     END AS time_to_cancellation_seconds,
 
     CASE
-        WHEN so.status = 'COMPLETED' THEN 1
+        WHEN so.status = 'DELIVERED' THEN 1
         ELSE 0
     END AS completed_order_flag,
 
