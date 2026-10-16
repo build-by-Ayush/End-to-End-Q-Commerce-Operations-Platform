@@ -23,8 +23,6 @@ Purpose: establish the scale and outcome mix of the operation, monitor the SLA t
 
 <img src="Images/01_Operations_Overview.png" width="100%">
 
-<br>
-
 ---
 
 <table>
@@ -42,12 +40,12 @@ Purpose: establish the scale and outcome mix of the operation, monitor the SLA t
   </tr>
   <tr>
     <td valign="top" width="50%">
-      <br><b>4. Root Cause / Operational Drivers — SLA outcome, basket size and conditions</b><br>
+      <b>4. Root Cause / Operational Drivers — SLA outcome, basket size and conditions</b><br>
       Purpose: compare handoff stages by SLA outcome, explore basket-size relationships, compare traffic/weather combinations, and examine differences between single-store and split orders.<br><br>
       <img src="Images/04_Root_Cause_Analysis_2.png" width="100%">
     </td>
     <td valign="top" width="50%">
-      <br><b>5. Store Performance — overview</b><br>
+      <b>5. Store Performance — overview</b><br>
       Purpose: compare the highest store failure rates, track daily average store-processing time, and review store-day operations in a compact table.
       <br><br><br>
       <img src="Images/05_Store_Perfomance_Analysis_1.png" width="100%">
