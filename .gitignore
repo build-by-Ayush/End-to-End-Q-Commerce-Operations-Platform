@@ -1,30 +1,32 @@
-# Python virtual environment
+# Python
 .venv/
-
-# Python cache
 __pycache__/
 *.py[cod]
 
-# Environment / secrets
+# Secrets and local configuration
 .env
 .env.*
+!.env.example
+profiles.yml
+credentials.json
+service-account*.json
+client_secret*.json
+*.pem
+*.key
+*.p12
+*.pfx
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# dbt generated directories
+# dbt-generated files
 target/
 dbt_packages/
 logs/
 
-# Secrets and credentials (crucial if you add keys later)
-*.json
-*.env
-.env
-profiles.yml
-
-# Generated synthetic datasets
+# Full generated datasets
 src/datasets/
 src/datasets_dirty/
 
+# Local files and IDE settings
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
