@@ -15,6 +15,46 @@ This project was built around four practical questions:
 
 The goal is to create an analytical workflow for diagnosis and prioritisation—not to claim that the dashboard proves causality or automatically identifies the correct intervention.
 
+---
+### Dashboard Snapshots
+
+#### 1. Operations Overview
+Purpose: establish the scale and outcome mix of the operation, monitor the SLA trend, and surface stores for follow-up.
+
+<img src="Images/01_Operations_Overview.png" width="100%">
+
+<br>
+
+---
+
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <b>2. SLA & Performance Analysis</b><br>
+      Purpose: compare the duration of each operational stage for breached and non-breached fulfilment units, compare actual stage averages against project targets, and compare unit-level breach rates by zone.<br><br>
+      <img src="Images/02_Performance_Analysis.png" width="100%">
+    </td>
+    <td valign="top" width="50%">
+      <b>3. Root Cause / Operational Drivers — assignment, staffing and distance</b><br>
+      Purpose: explore how assignment-attempt count relates to the pre-pickup handoff, examine store-day staffing versus processing time, and compare distance bands with transit time.<br><br>
+      <img src="Images/03_Root_Cause_Analysis_1.png" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <br><b>4. Root Cause / Operational Drivers — SLA outcome, basket size and conditions</b><br>
+      Purpose: compare handoff stages by SLA outcome, explore basket-size relationships, compare traffic/weather combinations, and examine differences between single-store and split orders.<br><br>
+      <img src="Images/04_Root_Cause_Analysis_2.png" width="100%">
+    </td>
+    <td valign="top" width="50%">
+      <br><b>5. Store Performance — overview</b><br>
+      Purpose: compare the highest store failure rates, track daily average store-processing time, and review store-day operations in a compact table.
+      <br><br><br>
+      <img src="Images/05_Store_Perfomance_Analysis_1.png" width="100%">
+    </td>
+  </tr>
+</table>
+
 ## SLA Definition
 
 The project uses the following operating rules:
@@ -154,44 +194,6 @@ The final MARTS layer uses descriptive dimensions, detailed facts and daily aggr
 
 The dashboard is organised as a four-page investigation flow: **monitor → diagnose stages → explore associated drivers → inspect stores and dates**. The pages are designed to answer different questions rather than repeat the same KPI set on multiple pages.
 
-### Dashboard snapshots
-
-#### 1. Operations Overview
-
-Purpose: establish the scale and outcome mix of the operation, monitor the SLA trend, and surface stores for follow-up.
-
-![Operations Overview dashboard](Images/01_Operations_Overview.png)
-
-#### 2. SLA & Performance Analysis
-
-Purpose: compare the duration of each operational stage for breached and non-breached fulfilment units, compare actual stage averages against project targets, and compare unit-level breach rates by zone.
-
-![SLA and Performance Analysis dashboard](Images/02_Performance_Analysis.png)
-
-#### 3. Root Cause / Operational Drivers — assignment, staffing and distance view
-
-Purpose: explore how assignment-attempt count relates to the pre-pickup handoff, examine store-day staffing versus processing time, and compare distance bands with transit time.
-
-![Root Cause Analysis — assignment, staffing and distance](Images/03_Root_Cause_Analysis_1.png)
-
-#### 4. Root Cause / Operational Drivers — SLA outcome, basket size and conditions view
-
-Purpose: compare handoff stages by SLA outcome, explore basket-size relationships, compare traffic/weather combinations, and examine differences between single-store and split orders.
-
-![Root Cause Analysis — basket size and operating conditions](Images/04_Root_Cause_Analysis_2.png)
-
-#### 5. Store Performance — overview
-
-Purpose: compare the highest store failure rates, track daily average store-processing time, and review store-day operations in a compact table.
-
-![Store Performance dashboard overview](Images/05_Store_Perfomance_Analysis_1.png)
-
-#### 6. Store Performance — expanded daily detail
-
-Purpose: filter to selected stores and inspect daily workload, outcomes, processing time, SLA breach rate and understaffing measures.
-
-![Store Performance expanded daily details](Images/06_Store_Perfomance_Analysis_2.png)
-
 ## Key Findings From the Current Dashboard
 
 The following are findings from the current simulated dataset and report state. They should be interpreted as descriptive patterns, not as verified real-world benchmarks or causal proof.
@@ -248,10 +250,9 @@ The **Packing Completed → Pickup** interval averages **6.1 minutes**, exceedin
 - **Git / GitHub** — source control
 
 
-##
-> **Note for Reviewers:** All tables in the Power BI dashboard (`BI File/`) are loaded in **Import mode** with the complete analytical dataset already embedded. You can open and explore the `.pbix` file directly in Power BI Desktop without setting up BigQuery, running local SQL transformations, or executing the Python data generation pipeline. The setup steps below are only required if you wish to reproduce or rebuild the upstream data warehouse.
-##
+## Rebuilding the Data Architecture from Scratch
 
+> **Note for Reviewers:** All tables in the Power BI dashboard (`BI File/`) are loaded in **Import mode** with the complete analytical dataset already embedded. You can open and explore the `.pbix` file directly in Power BI Desktop without setting up BigQuery, running local SQL transformations, or executing the Python data generation pipeline. The setup steps below are only required if you wish to reproduce or rebuild the upstream data warehouse.
 
 ## Scope and Limitations
 
